@@ -1,30 +1,32 @@
+**中文** | [English](./README_EN.md)
+
 # Model Mapper
 
-A lightweight reverse proxy that intercepts LLM API requests, remaps model names, and forwards them to any upstream provider. Built for scenarios where your client (e.g. Claude Code, Claude Desktop) speaks one API format but your upstream uses different model names — or even a different protocol entirely.
+轻量级 LLM API 反向代理，拦截请求并重新映射模型名称后转发至上游。适用于客户端（如 Claude Code、Claude Desktop）与上游使用不同模型名称，甚至不同协议的场景。
 
-## Features
+## 功能特性
 
-- **Model name mapping** — Route `claude-opus-4-6` → `deepseek-v4-pro`, `claude-sonnet-4-6` → `deepseek-v4-flash`, etc. Each model maps independently.
-- **Dual mode** — `passthrough` for Anthropic-compatible upstreams, `anthropic-to-openai` for OpenAI-compatible upstreams (full protocol conversion with streaming SSE, tool use, and tool results).
-- **Web UI** — Configure everything from the browser at `http://localhost:9483`.
-- **Security** — Binds to `127.0.0.1` by default, Origin/Referer CSRF protection, `config.json` saved with `0600` permissions.
-- **Single binary** — No dependencies. Cross-compiles to macOS arm64 and Linux amd64.
+- **模型名映射** — 将 `claude-opus-4-6` → `deepseek-v4-pro`、`claude-sonnet-4-6` → `deepseek-v4-flash` 等，每个模型独立映射。
+- **双工作模式** — `passthrough` 透传模式适配 Anthropic 兼容上游；`anthropic-to-openai` 转换模式适配 OpenAI 兼容上游（完整协议转换，支持流式 SSE、Tool Use）。
+- **Web 管理界面** — 在浏览器中配置一切，地址 `http://localhost:9483`。
+- **安全防护** — 默认绑定 `127.0.0.1`，Origin/Referer CSRF 校验，`config.json` 以 `0600` 权限保存。
+- **单文件部署** — 零依赖，支持交叉编译至 macOS arm64 和 Linux amd64。
 
-## Quick Start
+## 快速开始
 
-Download the latest binary from [Releases](https://github.com/naplesblue/model-mapper/releases), or build from source:
+从 [Releases](https://github.com/naplesblue/model-mapper/releases) 下载预编译二进制，或从源码构建：
 
 ```bash
-# Build
+# 构建
 make build
 
-# First run — generates config.json with defaults
+# 首次运行 — 自动生成默认 config.json
 ./model-mapper
 
-# Open http://127.0.0.1:9483 in your browser to configure
+# 打开 http://127.0.0.1:9483 进行配置
 ```
 
-Edit `config.json` (or use the Web UI) to set your upstream token:
+编辑 `config.json`（或通过 Web UI）设置上游 Token：
 
 ```json
 {
@@ -42,78 +44,78 @@ Edit `config.json` (or use the Web UI) to set your upstream token:
 }
 ```
 
-Then point your client at the proxy:
+在客户端中指向代理：
 
 ```bash
 # Claude Code
 ANTHROPIC_BASE_URL=http://127.0.0.1:9483 ANTHROPIC_API_KEY=any claude
 
-# Claude Desktop — set Base URL to http://127.0.0.1:9483
+# Claude Desktop — 将 Base URL 设为 http://127.0.0.1:9483
 ```
 
-## Modes
+## 工作模式
 
-| Mode | `upstream_url` | Use case |
+| 模式 | `upstream_url` | 适用场景 |
 |---|---|---|
-| `passthrough` | Anthropic-compatible endpoint (e.g. `api.deepseek.com/anthropic`) | Upstream natively speaks Anthropic protocol. Only model names are remapped. |
-| `anthropic-to-openai` | OpenAI-compatible endpoint (e.g. `api.deepseek.com`) | Full protocol conversion: Anthropic requests → OpenAI, OpenAI responses → Anthropic. Supports streaming, tool use, and tool results. |
+| `passthrough` | Anthropic 兼容端点（如 `api.deepseek.com/anthropic`） | 上游原生支持 Anthropic 协议，仅做模型名替换 |
+| `anthropic-to-openai` | OpenAI 兼容端点（如 `api.deepseek.com`） | 完整协议转换：Anthropic 请求 → OpenAI，OpenAI 响应 → Anthropic。支持流式、Tool Use |
 
-## Deploy to Server (Linux)
+## 部署到服务器（Linux）
 
 ```bash
-# Cross-compile (or download from Releases)
+# 交叉编译（或从 Releases 下载）
 make build-linux
 
-# Copy to server
+# 传输到服务器
 scp dist/model-mapper-linux-amd64 deploy/* user@server:/tmp/
 
-# On the server
+# 在服务器上
 sudo mkdir -p /opt/model-mapper
 sudo cp /tmp/model-mapper-linux-amd64 /opt/model-mapper/model-mapper
 sudo cp /tmp/config.example.json /opt/model-mapper/config.json
 sudo chmod +x /opt/model-mapper/model-mapper
 
-# Edit config.json with your API key
+# 编辑 config.json 填入 API Key
 sudo vi /opt/model-mapper/config.json
 
-# Install systemd service
+# 安装 systemd 服务
 sudo cp /tmp/model-mapper.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now model-mapper
 
-# Optional: nginx reverse proxy for LAN access
+# 可选：nginx 反代供局域网访问
 sudo cp /tmp/nginx.conf.example /etc/nginx/sites-available/model-mapper
 sudo ln -s /etc/nginx/sites-available/model-mapper /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-## Build from Source
+## 从源码构建
 
 ```bash
-make build          # native binary → ./model-mapper
-make build-darwin   # macOS arm64   → dist/model-mapper-darwin-arm64
-make build-linux    # Linux amd64   → dist/model-mapper-linux-amd64
-make build-all      # both platforms
-make clean          # remove build artifacts
+make build          # 本机二进制 → ./model-mapper
+make build-darwin   # macOS arm64  → dist/model-mapper-darwin-arm64
+make build-linux    # Linux amd64  → dist/model-mapper-linux-amd64
+make build-all      # 两个平台
+make clean          # 清理构建产物
 ```
 
-## Project Structure
+## 项目结构
 
 ```
-├── main.go                 # Entry point, routing, embed
-├── config.go               # Config struct, load/save, CSRF protection
-├── proxy.go                # Passthrough proxy, model name replacement
-├── convert.go              # Anthropic ↔ OpenAI protocol conversion engine
+├── main.go                 # 入口、路由、embed
+├── config.go               # 配置结构、加载/保存、CSRF 防护
+├── proxy.go                # 透传代理、模型名替换
+├── convert.go              # Anthropic ↔ OpenAI 协议转换引擎
 ├── web/
-│   └── index.html          # Web UI (embedded into binary)
+│   └── index.html          # Web 管理界面（编译进二进制）
 ├── deploy/
-│   ├── config.example.json # Config template
-│   ├── nginx.conf.example  # Nginx reverse proxy config
-│   └── model-mapper.service # Systemd unit file
+│   ├── config.example.json # 配置模板
+│   ├── nginx.conf.example  # Nginx 反代配置
+│   └── model-mapper.service # Systemd unit 文件
 ├── Makefile
 └── go.mod
 ```
 
-## License
+## 许可证
 
 MIT
