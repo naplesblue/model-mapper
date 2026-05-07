@@ -1,0 +1,23 @@
+[Unit]
+Description=Model Mapper
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=model-mapper
+Group=model-mapper
+WorkingDirectory=/opt/model-mapper
+ExecStart=/opt/model-mapper/model-mapper
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/model-mapper
+
+[Install]
+WantedBy=multi-user.target

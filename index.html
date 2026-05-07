@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Model Mapper</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f5f5f5;
+    color: #111;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 48px 16px;
+  }
+  .card {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 36px 40px;
+    width: 100%;
+    max-width: 560px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -.3px;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 28px;
+  }
+  .field { margin-bottom: 20px; }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #444;
+    margin-bottom: 6px;
+  }
+  input, select, textarea {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    color: #111;
+    background: #fafafa;
+    transition: border-color .15s, background .15s;
+    outline: none;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: #111;
+    background: #fff;
+  }
+  textarea { resize: vertical; min-height: 90px; }
+  .hint { font-size: 12px; color: #888; margin-top: 4px; }
+  .row { display: flex; gap: 16px; }
+  .row .field { flex: 1; }
+  .actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+  button {
+    padding: 10px 24px;
+    background: #111;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  button:hover { background: #333; }
+  button:active { background: #000; }
+  button:disabled { background: #999; cursor: not-allowed; }
+  .status {
+    font-size: 13px;
+    padding: 0 4px;
+    transition: opacity .3s;
+  }
+  .status.ok { color: #16a34a; }
+  .status.err { color: #dc2626; }
+  .divider { border: none; border-top: 1px solid #eee; margin: 24px 0; }
+  .section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: #888;
+    margin-bottom: 16px;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Model Mapper</h1>
+  <p class="subtitle">拦截指定模型名，替换为目标模型后转发到上游</p>
+
+  <div class="section-title">服务设置</div>
+  <div class="row">
+    <div class="field">
+      <label for="bind_host">绑定地址</label>
+      <input id="bind_host" type="text" placeholder="127.0.0.1">
+      <p class="hint">修改后需重启服务生效</p>
+    </div>
+    <div class="field">
+      <label for="port">监听端口</label>
+      <input id="port" type="number" min="1" max="65535" placeholder="9483">
+      <p class="hint">修改后需重启服务生效</p>
+    </div>
+  </div>
+  <div class="row">
+    <div class="field">
+      <label for="protocol">上游协议</label>
+      <select id="protocol">
+        <option value="anthropic">Anthropic</option>
+        <option value="openai">OpenAI</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="mode">工作模式</label>
+      <select id="mode">
+        <option value="anthropic-to-openai">Anthropic → OpenAI（转换）</option>
+        <option value="passthrough">Passthrough（透传）</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="upstream_url">上游 URL</label>
+    <input id="upstream_url" type="url" placeholder="https://api.deepseek.com">
+  </div>
+
+  <div class="field">
+    <label for="upstream_token">上游 Token / API Key</label>
+    <input id="upstream_token" type="password" placeholder="sk-... 或 tp-...">
+    <p class="hint">Anthropic 协议用 x-api-key；OpenAI 协议用 Authorization Bearer</p>
+  </div>
+
+  <hr class="divider">
+  <div class="section-title">模型映射</div>
+
+  <div class="field">
+    <label for="model_map">映射规则（每行一条：客户端模型 = 上游模型）</label>
+    <textarea id="model_map" placeholder="claude-opus-4-6 = deepseek-v4-pro&#10;claude-sonnet-4-6 = deepseek-v4-flash"></textarea>
+    <p class="hint">大小写不敏感。未命中的模型名将原样透传</p>
+  </div>
+
+  <div class="actions">
+    <button id="save-btn" onclick="save()">保存配置</button>
+    <span class="status" id="status"></span>
+  </div>
+</div>
+
+<script>
+async function load() {
+  const res = await fetch('/api/config');
+  const c = await res.json();
+  document.getElementById('bind_host').value = c.bind_host || '127.0.0.1';
+  document.getElementById('port').value = c.port || 9483;
+  document.getElementById('upstream_url').value = c.upstream_url || '';
+  document.getElementById('upstream_token').value = c.upstream_token || '';
+  document.getElementById('protocol').value = c.protocol || 'anthropic';
+  document.getElementById('mode').value = c.mode || 'passthrough';
+  // model_map: object → "key = value" lines
+  const map = c.model_map || {};
+  document.getElementById('model_map').value =
+    Object.entries(map).map(([k, v]) => k + ' = ' + v).join('\n');
+}
+
+async function save() {
+  const btn = document.getElementById('save-btn');
+  const status = document.getElementById('status');
+  btn.disabled = true;
+  status.textContent = '';
+
+  // Parse "key = value" lines into object
+  const modelMap = {};
+  document.getElementById('model_map').value
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean)
+    .forEach(line => {
+      const eq = line.indexOf('=');
+      if (eq > 0) {
+        const src = line.slice(0, eq).trim();
+        const dst = line.slice(eq + 1).trim();
+        if (src && dst) modelMap[src] = dst;
+      }
+    });
+
+  const body = {
+    bind_host: document.getElementById('bind_host').value.trim(),
+    port: parseInt(document.getElementById('port').value, 10) || 9483,
+    upstream_url: document.getElementById('upstream_url').value.trim(),
+    upstream_token: document.getElementById('upstream_token').value.trim(),
+    protocol: document.getElementById('protocol').value,
+    mode: document.getElementById('mode').value,
+    model_map: modelMap,
+  };
+
+  try {
+    const res = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      status.textContent = '已保存';
+      status.className = 'status ok';
+    } else {
+      status.textContent = '保存失败 ' + res.status;
+      status.className = 'status err';
+    }
+  } catch (e) {
+    status.textContent = '网络错误';
+    status.className = 'status err';
+  }
+
+  btn.disabled = false;
+  setTimeout(() => { status.textContent = ''; }, 3000);
+}
+
+load();
+</script>
+</body>
+</html>
+
