@@ -12,7 +12,7 @@ A lightweight reverse proxy that intercepts LLM API requests, remaps model names
 
 ## Quick Start
 
-Download the latest binary from [Releases](https://github.com/user/model-mapper/releases), or build from source:
+Download the latest binary from [Releases](https://github.com/naplesblue/model-mapper/releases), or build from source:
 
 ```bash
 # Build
