@@ -70,10 +70,12 @@ make build-linux
 scp dist/model-mapper-linux-amd64 deploy/* user@server:/tmp/
 
 # On the server
+sudo useradd -r -s /usr/sbin/nologin model-mapper   # create service user
 sudo mkdir -p /opt/model-mapper
 sudo cp /tmp/model-mapper-linux-amd64 /opt/model-mapper/model-mapper
 sudo cp /tmp/config.example.json /opt/model-mapper/config.json
 sudo chmod +x /opt/model-mapper/model-mapper
+sudo chown -R model-mapper:model-mapper /opt/model-mapper
 
 # Edit config.json with your API key
 sudo vi /opt/model-mapper/config.json

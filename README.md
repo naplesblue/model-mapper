@@ -70,10 +70,12 @@ make build-linux
 scp dist/model-mapper-linux-amd64 deploy/* user@server:/tmp/
 
 # 在服务器上
+sudo useradd -r -s /usr/sbin/nologin model-mapper   # 创建服务用户
 sudo mkdir -p /opt/model-mapper
 sudo cp /tmp/model-mapper-linux-amd64 /opt/model-mapper/model-mapper
 sudo cp /tmp/config.example.json /opt/model-mapper/config.json
 sudo chmod +x /opt/model-mapper/model-mapper
+sudo chown -R model-mapper:model-mapper /opt/model-mapper
 
 # 编辑 config.json 填入 API Key
 sudo vi /opt/model-mapper/config.json
