@@ -1,6 +1,6 @@
 # Build artifacts
 model-mapper
-model-mapper-linux-amd64
+dist/
 
 # Config with real keys
 config.json

@@ -8,9 +8,11 @@ A lightweight reverse proxy that intercepts LLM API requests, remaps model names
 - **Dual mode** — `passthrough` for Anthropic-compatible upstreams, `anthropic-to-openai` for OpenAI-compatible upstreams (full protocol conversion with streaming SSE, tool use, and tool results).
 - **Web UI** — Configure everything from the browser at `http://localhost:9483`.
 - **Security** — Binds to `127.0.0.1` by default, Origin/Referer CSRF protection, `config.json` saved with `0600` permissions.
-- **Single binary** — No dependencies. Cross-compiles to Linux amd64 for headless deployment.
+- **Single binary** — No dependencies. Cross-compiles to macOS arm64 and Linux amd64.
 
 ## Quick Start
+
+Download the latest binary from [Releases](https://github.com/user/model-mapper/releases), or build from source:
 
 ```bash
 # Build
@@ -59,11 +61,11 @@ ANTHROPIC_BASE_URL=http://127.0.0.1:9483 ANTHROPIC_API_KEY=any claude
 ## Deploy to Server (Linux)
 
 ```bash
-# Cross-compile
+# Cross-compile (or download from Releases)
 make build-linux
 
 # Copy to server
-scp model-mapper-linux-amd64 deploy/* user@server:/tmp/
+scp dist/model-mapper-linux-amd64 deploy/* user@server:/tmp/
 
 # On the server
 sudo mkdir -p /opt/model-mapper
@@ -85,19 +87,30 @@ sudo ln -s /etc/nginx/sites-available/model-mapper /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
+## Build from Source
+
+```bash
+make build          # native binary → ./model-mapper
+make build-darwin   # macOS arm64   → dist/model-mapper-darwin-arm64
+make build-linux    # Linux amd64   → dist/model-mapper-linux-amd64
+make build-all      # both platforms
+make clean          # remove build artifacts
+```
+
 ## Project Structure
 
 ```
-├── main.go          # Entry point, routing
-├── config.go        # Config struct, load/save, CSRF protection
-├── proxy.go         # Passthrough proxy, model replacement
-├── convert.go       # Anthropic↔OpenAI protocol conversion
-├── index.html       # Web UI (embedded)
-├── Makefile
+├── main.go                 # Entry point, routing, embed
+├── config.go               # Config struct, load/save, CSRF protection
+├── proxy.go                # Passthrough proxy, model name replacement
+├── convert.go              # Anthropic ↔ OpenAI protocol conversion engine
+├── web/
+│   └── index.html          # Web UI (embedded into binary)
 ├── deploy/
-│   ├── config.example.json
-│   ├── nginx.conf.example
-│   └── model-mapper.service
+│   ├── config.example.json # Config template
+│   ├── nginx.conf.example  # Nginx reverse proxy config
+│   └── model-mapper.service # Systemd unit file
+├── Makefile
 └── go.mod
 ```
 

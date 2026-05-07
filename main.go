@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-//go:embed index.html
+//go:embed web/index.html
 var indexHTML []byte
 
 func main() {
