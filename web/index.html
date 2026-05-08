@@ -400,26 +400,26 @@ async function save() {
 
   collectAll();
 
-  // Build per-upstream mappings from routing table
-  const upMappings = upstreams.map(() => ({}));
-  routes.forEach((r, i) => {
-    if (r.client_model && r.upstream_index >= 0 && r.upstream_index < upstreams.length) {
-      const tierKey = TIER_KEYS[i];
-      const upModel = upstreams[r.upstream_index].models[tierKey] || r.client_model;
-      upMappings[r.upstream_index][r.client_model] = upModel;
-    }
+  // Build per-upstream mappings: each upstream's tier model definitions are
+  // ALWAYS persisted (even if no route currently points to it). The routing
+  // table only determines which upstream handles a request at runtime.
+  const upstreamsData = upstreams.map((u, i) => {
+    const mappings = [];
+    TIER_KEYS.forEach((key, j) => {
+      if (u.models[key]) {
+        const clientModel = (routes[j] && routes[j].client_model) || DEFAULT_CLIENT_MODELS[key];
+        mappings.push({ client_model: clientModel, upstream_model: u.models[key] });
+      }
+    });
+    return {
+      name: u.name,
+      url: u.url,
+      token: u.token,
+      auth_type: u.auth_type,
+      protocol: u.protocol,
+      mappings,
+    };
   });
-
-  const upstreamsData = upstreams.map((u, i) => ({
-    name: u.name,
-    url: u.url,
-    token: u.token,
-    auth_type: u.auth_type,
-    protocol: u.protocol,
-    mappings: Object.entries(upMappings[i]).map(([client_model, upstream_model]) =>
-      ({ client_model, upstream_model })
-    ),
-  }));
 
   const body = {
     bind_host: document.getElementById('bind_host').value.trim(),
