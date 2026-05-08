@@ -1,15 +1,28 @@
 {
   "bind_host": "127.0.0.1",
   "port": 9483,
-  "upstream_url": "https://api.deepseek.com/anthropic",
-  "upstream_token": "sk-在这里填你的-deepseek-key",
-  "protocol": "anthropic",
-  "mode": "passthrough",
-  "model_map": {
-    "claude-opus-4-6": "deepseek-v4-pro",
-    "claude-sonnet-4-6": "deepseek-v4-flash",
-    "claude-3-5-sonnet-20241022": "deepseek-v4-flash",
-    "claude-3-5-haiku-20241022": "deepseek-v4-flash",
-    "claude-3-haiku-20240307": "deepseek-v4-flash"
-  }
+  "upstreams": [
+    {
+      "name": "deepseek-anthropic",
+      "url": "https://api.deepseek.com/anthropic",
+      "token": "sk-在这里填你的-deepseek-key",
+      "auth_type": "anthropic",
+      "protocol": "anthropic",
+      "mappings": [
+        {"client_model": "claude-opus-4-6", "upstream_model": "deepseek-v4-pro"},
+        {"client_model": "claude-sonnet-4-6", "upstream_model": "deepseek-v4-flash"},
+        {"client_model": "claude-3-5-sonnet-20241022", "upstream_model": "deepseek-v4-flash"}
+      ]
+    },
+    {
+      "name": "xiaomi-mimo",
+      "url": "https://api.xiaomimimo.com/anthropic",
+      "token": "tp-在这里填你的-mimo-key",
+      "auth_type": "anthropic",
+      "protocol": "anthropic",
+      "mappings": [
+        {"client_model": "claude-opus-4-6-mimo", "upstream_model": "mimo-2.5-pro"}
+      ]
+    }
+  ]
 }

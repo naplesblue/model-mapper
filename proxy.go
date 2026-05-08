@@ -6,37 +6,68 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
 )
 
-// replaceModel 检查请求体中的 model 字段，若命中映射表则替换。
-// 返回 (新 body, 客户端原始 model 名, 替换后的目标 model 名)。
-func replaceModel(body []byte, c *Config) ([]byte, string, string) {
-	if len(body) == 0 {
-		return body, "", ""
+// findUpstream returns the UpstreamConfig and target upstream model name for the
+// given client model. Searches all upstreams' Mappings (case-insensitive, first
+// match wins). Returns (nil, "") if no upstream handles this model.
+func findUpstream(model string) (*UpstreamConfig, string) {
+	cfgMu.RLock()
+	defer cfgMu.RUnlock()
+	for i := range cfg.Upstreams {
+		for _, m := range cfg.Upstreams[i].Mappings {
+			if strings.EqualFold(model, m.ClientModel) {
+				return &cfg.Upstreams[i], m.UpstreamModel
+			}
+		}
+	}
+	return nil, ""
+}
+
+// setAuthHeaders sets authentication headers on the outgoing request based on
+// the upstream's AuthType.
+func setAuthHeaders(req *http.Request, up *UpstreamConfig) {
+	switch strings.ToLower(up.AuthType) {
+	case "openai":
+		req.Header.Set("Authorization", "Bearer "+up.Token)
+	default: // anthropic
+		req.Header.Set("x-api-key", up.Token)
+		req.Header.Set("anthropic-version", "2023-06-01")
+	}
+}
+
+// replaceModelInBody replaces the "model" field in the JSON body and returns
+// the modified body. If the body cannot be parsed, it is returned as-is.
+func replaceModelInBody(body []byte, newModel string) []byte {
+	if len(body) == 0 || newModel == "" {
+		return body
 	}
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return body, "", ""
+		return body
 	}
 	modelVal, ok := raw["model"]
 	if !ok {
-		return body, "", ""
+		return body
 	}
 	var modelStr string
 	if err := json.Unmarshal(modelVal, &modelStr); err != nil {
-		return body, "", ""
+		return body
 	}
-	for src, dst := range c.ModelMap {
-		if strings.EqualFold(modelStr, src) {
-			raw["model"], _ = json.Marshal(dst)
-			newBody, _ := json.Marshal(raw)
-			return newBody, modelStr, dst
-		}
+	// Only replace if model changed
+	if strings.EqualFold(modelStr, newModel) {
+		return body
 	}
-	return body, "", ""
+	raw["model"], _ = json.Marshal(newModel)
+	newBody, err := json.Marshal(raw)
+	if err != nil {
+		return body
+	}
+	return newBody
 }
 
 var hopHeaders = map[string]bool{
@@ -65,9 +96,11 @@ func copyHeaders(dst, src http.Header, skip ...string) {
 	}
 }
 
-var client = &http.Client{
+var httpClient = &http.Client{
 	Transport: &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
+		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: 60 * time.Second,
 		IdleConnTimeout:       90 * time.Second,
 	},
@@ -80,58 +113,46 @@ func readBody(r *http.Request) ([]byte, error) {
 	return io.ReadAll(r.Body)
 }
 
-func proxyHandler(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 64<<20) // 64MB limit
-	body, err := readBody(r)
-	if err != nil {
-		http.Error(w, "read body failed", http.StatusBadRequest)
-		return
+// handlePassthrough forwards the request body to the upstream without protocol
+// conversion. It performs model name replacement and auth header injection.
+func handlePassthrough(w http.ResponseWriter, r *http.Request, body []byte, up *UpstreamConfig, clientModel, targetModel string) {
+	// Replace model in body if target differs
+	if targetModel != clientModel {
+		newBody := replaceModelInBody(body, targetModel)
+		if !bytes.Equal(newBody, body) {
+			log.Printf("[passthrough] model replaced: %s -> %s  upstream=%s", clientModel, targetModel, up.Name)
+			body = newBody
+		}
 	}
 
-	cfgMu.RLock()
-	c := cfg
-	cfgMu.RUnlock()
+	upstreamURL := strings.TrimRight(up.URL, "/") + r.URL.RequestURI()
 
-	newBody, originalModel, targetModel := replaceModel(body, &c)
-	if originalModel != "" {
-		log.Printf("[proxy] model replaced: %s -> %s  path=%s", originalModel, targetModel, r.URL.Path)
-	}
-
-	upstreamBase := strings.TrimRight(c.UpstreamURL, "/")
-	upstreamURL := upstreamBase + r.URL.RequestURI()
-
-	req, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL, bytes.NewReader(newBody))
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL, bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, "build upstream request failed", http.StatusInternalServerError)
 		return
 	}
 
-	// 透传客户端请求头（过滤 Host 和逐跳头）
+	// Copy client headers (strip Host and auth-related headers)
 	copyHeaders(req.Header, r.Header, "Host", "Authorization", "X-Api-Key", "Anthropic-Version")
 
-	// 按协议设置鉴权头
-	switch strings.ToLower(c.Protocol) {
-	case "openai":
-		req.Header.Set("Authorization", "Bearer "+c.UpstreamToken)
-	default: // anthropic
-		req.Header.Set("x-api-key", c.UpstreamToken)
-		req.Header.Set("anthropic-version", "2023-06-01")
-	}
+	// Set upstream auth
+	setAuthHeaders(req, up)
 
 	if req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Accept-Encoding", "identity")
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
-		log.Printf("[proxy] upstream error: %v", err)
+		log.Printf("[passthrough] upstream=%s error: %v", up.Name, err)
 		http.Error(w, fmt.Sprintf("upstream error: %v", err), http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
 
-	// 透传响应头
+	// Copy response headers
 	copyHeaders(w.Header(), resp.Header)
 
 	isSSE := strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream")
@@ -164,6 +185,51 @@ func proxyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := io.Copy(w, resp.Body); err != nil {
-		log.Printf("[proxy] copy response failed: %v", err)
+		log.Printf("[passthrough] copy response failed: %v", err)
 	}
+}
+
+// proxyHandler is the catch-all fallback for non-/v1/messages paths.
+// It uses the first configured upstream as default.
+func proxyHandler(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
+	body, err := readBody(r)
+	if err != nil {
+		http.Error(w, "read body failed", http.StatusBadRequest)
+		return
+	}
+
+	// Try to route by model; fall back to first upstream
+	var up *UpstreamConfig
+	var clientModel, targetModel string
+
+	if len(body) > 0 {
+		var peek struct {
+			Model string `json:"model"`
+		}
+		if json.Unmarshal(body, &peek) == nil && peek.Model != "" {
+			clientModel = peek.Model
+			up, targetModel = findUpstream(clientModel)
+		}
+	}
+
+	if up == nil {
+		// Default: first upstream
+		cfgMu.RLock()
+		if len(cfg.Upstreams) > 0 {
+			up = &cfg.Upstreams[0]
+		}
+		cfgMu.RUnlock()
+	}
+
+	if up == nil {
+		http.Error(w, "no upstream configured", http.StatusBadGateway)
+		return
+	}
+
+	if targetModel == "" {
+		targetModel = clientModel
+	}
+
+	handlePassthrough(w, r, body, up, clientModel, targetModel)
 }

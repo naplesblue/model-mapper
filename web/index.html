@@ -8,100 +8,105 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: #f5f5f5;
-    color: #111;
-    min-height: 100vh;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
+    background: #f5f5f5; color: #111; min-height: 100vh;
+    display: flex; align-items: flex-start; justify-content: center;
     padding: 48px 16px;
   }
   .card {
-    background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 36px 40px;
-    width: 100%;
-    max-width: 560px;
+    background: #fff; border: 1px solid #ddd; border-radius: 8px;
+    padding: 36px 40px; width: 100%; max-width: 640px;
     box-shadow: 0 2px 8px rgba(0,0,0,.06);
   }
-  h1 {
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: -.3px;
-    margin-bottom: 6px;
+  h1 { font-size: 20px; font-weight: 700; letter-spacing: -.3px; margin-bottom: 6px; }
+  .subtitle { font-size: 13px; color: #666; margin-bottom: 28px; }
+  label { display: block; font-size: 13px; font-weight: 600; color: #444; margin-bottom: 6px; }
+  input, select {
+    width: 100%; padding: 9px 12px; border: 1px solid #ccc; border-radius: 6px;
+    font-size: 14px; font-family: inherit; color: #111; background: #fafafa;
+    transition: border-color .15s, background .15s; outline: none;
   }
-  .subtitle {
-    font-size: 13px;
-    color: #666;
-    margin-bottom: 28px;
-  }
-  .field { margin-bottom: 20px; }
-  label {
-    display: block;
-    font-size: 13px;
-    font-weight: 600;
-    color: #444;
-    margin-bottom: 6px;
-  }
-  input, select, textarea {
-    width: 100%;
-    padding: 9px 12px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-size: 14px;
-    font-family: inherit;
-    color: #111;
-    background: #fafafa;
-    transition: border-color .15s, background .15s;
-    outline: none;
-  }
-  input:focus, select:focus, textarea:focus {
-    border-color: #111;
-    background: #fff;
-  }
-  textarea { resize: vertical; min-height: 90px; }
+  input:focus, select:focus { border-color: #111; background: #fff; }
   .hint { font-size: 12px; color: #888; margin-top: 4px; }
-  .row { display: flex; gap: 16px; }
+  .row { display: flex; gap: 12px; }
   .row .field { flex: 1; }
+  .field { margin-bottom: 16px; }
   .actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
   button {
-    padding: 10px 24px;
-    background: #111;
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background .15s;
+    padding: 10px 24px; background: #111; color: #fff; border: none; border-radius: 6px;
+    font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s;
   }
   button:hover { background: #333; }
   button:active { background: #000; }
   button:disabled { background: #999; cursor: not-allowed; }
-  .status {
-    font-size: 13px;
-    padding: 0 4px;
-    transition: opacity .3s;
-  }
+  .status { font-size: 13px; padding: 0 4px; transition: opacity .3s; }
   .status.ok { color: #16a34a; }
   .status.err { color: #dc2626; }
   .divider { border: none; border-top: 1px solid #eee; margin: 24px 0; }
   .section-title {
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .6px;
-    color: #888;
-    margin-bottom: 16px;
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .6px; color: #888; margin-bottom: 16px;
   }
+
+  /* Routing table - transposed: tiers as columns, fields as rows */
+  .route-grid {
+    display: grid;
+    grid-template-columns: 80px 1fr 1fr 1fr;
+    gap: 10px 12px;
+    align-items: end;
+  }
+  .route-grid .row-label {
+    font-size: 13px; font-weight: 600; color: #555;
+    padding-bottom: 10px; text-align: right;
+  }
+  .route-grid .tier-header {
+    font-size: 14px; font-weight: 700; color: #333;
+    text-align: center; padding-bottom: 4px;
+  }
+  .route-grid .field { margin-bottom: 0; }
+  .route-grid input, .route-grid select { text-align: center; }
+
+  /* Upstream cards */
+  .upstream-card {
+    border: 1px solid #e5e5e5; border-radius: 6px; padding: 16px;
+    margin-bottom: 12px; background: #fafbfc;
+  }
+  .upstream-card .field { margin-bottom: 12px; }
+  .upstream-card .field:last-child { margin-bottom: 0; }
+  .upstream-header {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;
+  }
+  .upstream-header .up-name { font-size: 14px; font-weight: 700; color: #333; }
+  .btn-sm {
+    padding: 5px 14px; font-size: 12px; border-radius: 4px; line-height: 1.4;
+  }
+  .btn-remove {
+    background: #fff; color: #dc2626; border: 1px solid #fca5a5;
+  }
+  .btn-remove:hover { background: #fef2f2; }
+  .btn-add {
+    width: 100%; background: #fff; color: #444; border: 1px dashed #ccc;
+    padding: 10px; font-size: 13px; font-weight: 500; margin-top: 4px;
+  }
+  .btn-add:hover { background: #fafafa; border-color: #999; }
+
+  /* Tier mapping row inside upstream card */
+  .tier-row {
+    display: flex; gap: 12px; align-items: flex-end; margin-bottom: 10px;
+  }
+  .tier-row .tier-label {
+    width: 64px; font-size: 13px; font-weight: 600; color: #555;
+    padding-bottom: 10px; flex-shrink: 0;
+  }
+  .tier-row .upstream-model { flex: 1; }
+  .tier-row .field { margin-bottom: 0; }
 </style>
 </head>
 <body>
 <div class="card">
   <h1>Model Mapper</h1>
-  <p class="subtitle">拦截指定模型名，替换为目标模型后转发到上游</p>
+  <p class="subtitle">三档模型：Opus / Sonnet / Haiku — 切换上游即可</p>
 
+  <!-- ===== Server Settings ===== -->
   <div class="section-title">服务设置</div>
   <div class="row">
     <div class="field">
@@ -115,63 +120,275 @@
       <p class="hint">修改后需重启服务生效</p>
     </div>
   </div>
-  <div class="row">
-    <div class="field">
-      <label for="protocol">上游协议</label>
-      <select id="protocol">
-        <option value="anthropic">Anthropic</option>
-        <option value="openai">OpenAI</option>
-      </select>
-    </div>
-    <div class="field">
-      <label for="mode">工作模式</label>
-      <select id="mode">
-        <option value="anthropic-to-openai">Anthropic → OpenAI（转换）</option>
-        <option value="passthrough">Passthrough（透传）</option>
-      </select>
-    </div>
-  </div>
 
-  <div class="field">
-    <label for="upstream_url">上游 URL</label>
-    <input id="upstream_url" type="url" placeholder="https://api.deepseek.com">
-  </div>
-
-  <div class="field">
-    <label for="upstream_token">上游 Token / API Key</label>
-    <input id="upstream_token" type="password" placeholder="sk-... 或 tp-...">
-    <p class="hint">Anthropic 协议用 x-api-key；OpenAI 协议用 Authorization Bearer</p>
-  </div>
-
+  <!-- ===== Routing Table (3 fixed tiers) ===== -->
   <hr class="divider">
-  <div class="section-title">模型映射</div>
+  <div class="section-title">模型路由表</div>
+  <div class="route-table" id="routes-container"></div>
+  <p class="hint">切换上游：改下拉框。切换上游模型名：去下方对应上游卡片修改。</p>
 
-  <div class="field">
-    <label for="model_map">映射规则（每行一条：客户端模型 = 上游模型）</label>
-    <textarea id="model_map" placeholder="claude-opus-4-6 = deepseek-v4-pro&#10;claude-sonnet-4-6 = deepseek-v4-flash"></textarea>
-    <p class="hint">大小写不敏感。未命中的模型名将原样透传</p>
-  </div>
+  <!-- ===== Upstream Configs ===== -->
+  <hr class="divider">
+  <div class="section-title">上游配置</div>
+  <div id="upstreams-container"></div>
+  <button class="btn-add" onclick="addUpstream()">+ 添加上游</button>
 
-  <div class="actions">
+  <div class="actions" style="margin-top: 24px;">
     <button id="save-btn" onclick="save()">保存配置</button>
     <span class="status" id="status"></span>
   </div>
 </div>
 
 <script>
+// 3 fixed tiers
+const TIERS = ['Opus', 'Sonnet', 'Haiku'];
+const TIER_KEYS = ['opus', 'sonnet', 'haiku'];
+const DEFAULT_CLIENT_MODELS = {
+  opus: 'claude-opus-4-6',
+  sonnet: 'claude-sonnet-4-6',
+  haiku: 'claude-haiku-4-5',
+};
+
+// State
+let routes = [];    // [{client_model, upstream_index}]
+let upstreams = []; // [{name, url, token, auth_type, protocol, models: {opus, sonnet, haiku}}]
+let statusTimer = null;
+
+function newUpstream() {
+  return {
+    name: '', url: '', token: '', auth_type: 'anthropic', protocol: 'anthropic',
+    models: { opus: '', sonnet: '', haiku: '' },
+  };
+}
+
+// ============ Routing Table ============
+
+function renderRoutes() {
+  const container = document.getElementById('routes-container');
+  const upOptions = upstreams.map((u, i) =>
+    `<option value="${i}">${u.name || '(未命名 #'+(i+1)+')'}</option>`
+  ).join('');
+
+  // Transposed grid: rows = fields, columns = tiers
+  // Row 1: tier headers (Opus / Sonnet / Haiku)
+  // Row 2: client model inputs
+  // Row 3: upstream selects
+  // Row 4: upstream model (readonly)
+  const tierHeaders = TIERS.map(t => `<div class="tier-header">${t}</div>`).join('');
+
+  const clientModelInputs = TIER_KEYS.map((key, i) => {
+    const r = routes[i] || { client_model: DEFAULT_CLIENT_MODELS[key], upstream_index: -1 };
+    return `<div class="field"><input type="text" value="${esc(r.client_model)}" placeholder="${DEFAULT_CLIENT_MODELS[key]}" onchange="routes[${i}].client_model = this.value.trim()"></div>`;
+  }).join('');
+
+  const upstreamSelects = TIER_KEYS.map((key, i) => {
+    const r = routes[i] || { client_model: DEFAULT_CLIENT_MODELS[key], upstream_index: -1 };
+    return `<div class="field"><select onchange="routes[${i}].upstream_index = parseInt(this.value); renderRoutes()" id="route-select-${i}"><option value="-1" ${r.upstream_index < 0 ? 'selected' : ''} disabled>—</option>${upOptions}</select></div>`;
+  }).join('');
+
+  const upstreamModels = TIER_KEYS.map((key, i) => {
+    const r = routes[i] || { client_model: DEFAULT_CLIENT_MODELS[key], upstream_index: -1 };
+    const upModel = getUpstreamModel(r.upstream_index, key);
+    return `<div class="field"><input type="text" value="${esc(upModel)}" readonly style="background:#f0f0f0;color:#555;cursor:default"></div>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="route-grid">
+      <div></div>${tierHeaders}
+      <div class="row-label">客户端模型</div>${clientModelInputs}
+      <div class="row-label">上游</div>${upstreamSelects}
+      <div class="row-label">上游模型</div>${upstreamModels}
+    </div>`;
+
+  // Set selects
+  routes.forEach((r, i) => {
+    const sel = document.getElementById('route-select-' + i);
+    if (sel) sel.value = String(r.upstream_index);
+  });
+}
+
+function getUpstreamModel(upIndex, tierKey) {
+  if (upIndex < 0 || upIndex >= upstreams.length) return '';
+  return upstreams[upIndex].models[tierKey] || '';
+}
+
+// ============ Upstream Cards ============
+
+function renderUpstreams() {
+  const container = document.getElementById('upstreams-container');
+  container.innerHTML = upstreams.map((u, i) => `
+    <div class="upstream-card" data-index="${i}">
+      <div class="upstream-header">
+        <span class="up-name">上游 #${i + 1}</span>
+        <button class="btn-sm btn-remove" onclick="removeUpstream(${i})">移除</button>
+      </div>
+      <div class="field">
+        <label>名称</label>
+        <input type="text" value="${esc(u.name)}" placeholder="deepseek"
+          onchange="upstreams[${i}].name = this.value.trim(); renderRoutes();">
+      </div>
+      <div class="field">
+        <label>URL</label>
+        <input type="url" value="${esc(u.url)}" placeholder="https://api.deepseek.com/anthropic"
+          onchange="upstreams[${i}].url = this.value.trim()">
+      </div>
+      <div class="field">
+        <label>Token</label>
+        <input type="password" value="${esc(u.token)}" placeholder="sk-..."
+          onchange="upstreams[${i}].token = this.value.trim()">
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>认证方式</label>
+          <select onchange="upstreams[${i}].auth_type = this.value">
+            <option value="anthropic" ${u.auth_type === 'anthropic' ? 'selected' : ''}>Anthropic (x-api-key)</option>
+            <option value="openai" ${u.auth_type === 'openai' ? 'selected' : ''}>OpenAI (Bearer)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>上游协议</label>
+          <select onchange="upstreams[${i}].protocol = this.value">
+            <option value="anthropic" ${u.protocol === 'anthropic' ? 'selected' : ''}>Anthropic</option>
+            <option value="openai" ${u.protocol === 'openai' ? 'selected' : ''}>OpenAI</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <label style="margin-bottom:8px">该上游的模型名</label>
+        ${TIER_KEYS.map((key, j) => `
+        <div class="tier-row">
+          <div class="tier-label">${TIERS[j]}</div>
+          <div class="field upstream-model">
+            <input type="text" value="${esc(u.models[key] || '')}"
+              placeholder="${DEFAULT_CLIENT_MODELS[key]}"
+              onchange="upstreams[${i}].models['${key}'] = this.value.trim(); renderRoutes();">
+          </div>
+        </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function addUpstream() {
+  upstreams.push(newUpstream());
+  renderUpstreams();
+  renderRoutes();
+}
+
+function removeUpstream(index) {
+  upstreams.splice(index, 1);
+  routes.forEach(r => {
+    if (r.upstream_index === index) r.upstream_index = -1;
+    else if (r.upstream_index > index) r.upstream_index--;
+  });
+  renderUpstreams();
+  renderRoutes();
+}
+
+// ============ Persistence ============
+
+function collectAll() {
+  // routes[] is already live via onchange handlers — nothing to collect
+
+  // Upstreams
+  const cards = document.querySelectorAll('.upstream-card');
+  upstreams = [];
+  cards.forEach(card => {
+    const inputs = card.querySelectorAll('input[type="text"], input[type="url"], input[type="password"]');
+    const selects = card.querySelectorAll('select');
+    const u = {
+      name: inputs[0].value.trim(),
+      url: inputs[1].value.trim(),
+      token: inputs[2].value.trim(),
+      auth_type: selects[0].value,
+      protocol: selects[1].value,
+      models: {},
+    };
+    // Next 3 inputs are the tier model names
+    TIER_KEYS.forEach((key, j) => {
+      u.models[key] = (inputs[3 + j] || {}).value ? inputs[3 + j].value.trim() : '';
+    });
+    upstreams.push(u);
+  });
+}
+
 async function load() {
   const res = await fetch('/api/config');
   const c = await res.json();
   document.getElementById('bind_host').value = c.bind_host || '127.0.0.1';
   document.getElementById('port').value = c.port || 9483;
-  document.getElementById('upstream_url').value = c.upstream_url || '';
-  document.getElementById('upstream_token').value = c.upstream_token || '';
-  document.getElementById('protocol').value = c.protocol || 'anthropic';
-  document.getElementById('mode').value = c.mode || 'passthrough';
-  // model_map: object → "key = value" lines
-  const map = c.model_map || {};
-  document.getElementById('model_map').value =
-    Object.entries(map).map(([k, v]) => k + ' = ' + v).join('\n');
+
+  // Init routes for 3 tiers
+  routes = TIER_KEYS.map(key => ({
+    client_model: DEFAULT_CLIENT_MODELS[key],
+    upstream_index: -1,
+  }));
+
+  // Load upstreams
+  upstreams = (c.upstreams || []).map(u => {
+    const models = { opus: '', sonnet: '', haiku: '' };
+    // Parse mappings[] into tiered models
+    (u.mappings || []).forEach(m => {
+      const cm = (m.client_model || '').toLowerCase();
+      if (cm.includes('opus')) models.opus = m.upstream_model || '';
+      else if (cm.includes('sonnet')) models.sonnet = m.upstream_model || '';
+      else if (cm.includes('haiku')) models.haiku = m.upstream_model || '';
+    });
+    return {
+      name: u.name || '',
+      url: u.url || '',
+      token: u.token || '',
+      auth_type: u.auth_type || 'anthropic',
+      protocol: u.protocol || 'anthropic',
+      models,
+    };
+  });
+
+  // Legacy single-upstream format
+  if (upstreams.length === 0 && (c.upstream_url || c.upstream_token)) {
+    const map = c.model_map || {};
+    const models = { opus: '', sonnet: '', haiku: '' };
+    Object.entries(map).forEach(([clientModel, upModel]) => {
+      const cm = clientModel.toLowerCase();
+      if (cm.includes('opus')) models.opus = upModel;
+      else if (cm.includes('sonnet')) models.sonnet = upModel;
+      else if (cm.includes('haiku')) models.haiku = upModel;
+    });
+    upstreams = [{
+      name: 'default',
+      url: c.upstream_url || '',
+      token: c.upstream_token || '',
+      auth_type: c.protocol || 'anthropic',
+      protocol: c.protocol || 'anthropic',
+      models,
+    }];
+  }
+
+  // Auto-fill route upstream_index from existing mappings
+  upstreams.forEach((u, i) => {
+    TIER_KEYS.forEach((key, j) => {
+      if (u.models[key] && routes[j].upstream_index < 0) {
+        routes[j].upstream_index = i;
+        routes[j].client_model = DEFAULT_CLIENT_MODELS[key];
+      }
+    });
+  });
+
+  // Also check config's upstreams mappings for client_model
+  (c.upstreams || []).forEach((u, i) => {
+    (u.mappings || []).forEach(m => {
+      TIER_KEYS.forEach((key, j) => {
+        if (m.client_model && m.client_model.toLowerCase().includes(key)) {
+          routes[j].client_model = m.client_model;
+          routes[j].upstream_index = i;
+        }
+      });
+    });
+  });
+
+  renderUpstreams();
+  renderRoutes();
 }
 
 async function save() {
@@ -179,30 +396,35 @@ async function save() {
   const status = document.getElementById('status');
   btn.disabled = true;
   status.textContent = '';
+  status.className = 'status';
 
-  // Parse "key = value" lines into object
-  const modelMap = {};
-  document.getElementById('model_map').value
-    .split('\n')
-    .map(s => s.trim())
-    .filter(Boolean)
-    .forEach(line => {
-      const eq = line.indexOf('=');
-      if (eq > 0) {
-        const src = line.slice(0, eq).trim();
-        const dst = line.slice(eq + 1).trim();
-        if (src && dst) modelMap[src] = dst;
-      }
-    });
+  collectAll();
+
+  // Build per-upstream mappings from routing table
+  const upMappings = upstreams.map(() => ({}));
+  routes.forEach((r, i) => {
+    if (r.client_model && r.upstream_index >= 0 && r.upstream_index < upstreams.length) {
+      const tierKey = TIER_KEYS[i];
+      const upModel = upstreams[r.upstream_index].models[tierKey] || r.client_model;
+      upMappings[r.upstream_index][r.client_model] = upModel;
+    }
+  });
+
+  const upstreamsData = upstreams.map((u, i) => ({
+    name: u.name,
+    url: u.url,
+    token: u.token,
+    auth_type: u.auth_type,
+    protocol: u.protocol,
+    mappings: Object.entries(upMappings[i]).map(([client_model, upstream_model]) =>
+      ({ client_model, upstream_model })
+    ),
+  }));
 
   const body = {
     bind_host: document.getElementById('bind_host').value.trim(),
     port: parseInt(document.getElementById('port').value, 10) || 9483,
-    upstream_url: document.getElementById('upstream_url').value.trim(),
-    upstream_token: document.getElementById('upstream_token').value.trim(),
-    protocol: document.getElementById('protocol').value,
-    mode: document.getElementById('mode').value,
-    model_map: modelMap,
+    upstreams: upstreamsData,
   };
 
   try {
@@ -224,11 +446,15 @@ async function save() {
   }
 
   btn.disabled = false;
-  setTimeout(() => { status.textContent = ''; }, 3000);
+  if (statusTimer) clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => { status.textContent = ''; }, 3000);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 load();
 </script>
 </body>
 </html>
-

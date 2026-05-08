@@ -686,32 +686,19 @@ func streamOpenAIToAnthropic(resp *http.Response, w http.ResponseWriter, origina
 
 // ==================== Handler ====================
 
-func handleMessagesConvert(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
-	body, err := readBody(r)
-	if err != nil {
-		http.Error(w, "read body failed", http.StatusBadRequest)
-		return
-	}
-
+// handleAnthropicToOpenAI converts an Anthropic client request to OpenAI format,
+// forwards it to the upstream, and converts the response back to Anthropic format.
+// The caller is responsible for model mapping — targetModel is already resolved.
+func handleAnthropicToOpenAI(w http.ResponseWriter, r *http.Request, body []byte, up *UpstreamConfig, targetModel, originalModel string) {
 	var aReq anthropicRequest
 	if err := json.Unmarshal(body, &aReq); err != nil {
 		http.Error(w, "invalid anthropic request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	cfgMu.RLock()
-	c := cfg
-	cfgMu.RUnlock()
-
-	// Record the original model name the client sent
-	originalModel := aReq.Model
-	for src, dst := range c.ModelMap {
-		if strings.EqualFold(aReq.Model, src) {
-			aReq.Model = dst
-			log.Printf("[convert] model replaced: %s -> %s", originalModel, dst)
-			break
-		}
+	// Apply the resolved target model
+	if targetModel != "" {
+		aReq.Model = targetModel
 	}
 
 	oReq, err := anthropicToOpenAI(&aReq)
@@ -722,7 +709,7 @@ func handleMessagesConvert(w http.ResponseWriter, r *http.Request) {
 
 	reqBody, _ := json.Marshal(oReq)
 
-	upstreamURL := strings.TrimRight(c.UpstreamURL, "/") + "/chat/completions"
+	upstreamURL := strings.TrimRight(up.URL, "/") + "/chat/completions"
 	httpReq, err := http.NewRequestWithContext(r.Context(), "POST", upstreamURL, bytes.NewReader(reqBody))
 	if err != nil {
 		http.Error(w, "build upstream request failed", http.StatusInternalServerError)
@@ -730,12 +717,12 @@ func handleMessagesConvert(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.UpstreamToken)
+	httpReq.Header.Set("Authorization", "Bearer "+up.Token)
 	httpReq.Header.Set("Accept-Encoding", "identity")
 
-	resp, err := client.Do(httpReq)
+	resp, err := httpClient.Do(httpReq)
 	if err != nil {
-		log.Printf("[convert] upstream error: %v", err)
+		log.Printf("[a2o] upstream=%s error: %v", up.Name, err)
 		http.Error(w, fmt.Sprintf("upstream error: %v", err), http.StatusBadGateway)
 		return
 	}
@@ -744,7 +731,7 @@ func handleMessagesConvert(w http.ResponseWriter, r *http.Request) {
 	// Upstream error — forward as Anthropic error
 	if resp.StatusCode >= 400 {
 		errBody, _ := io.ReadAll(resp.Body)
-		log.Printf("[convert] upstream %d: %s", resp.StatusCode, string(errBody))
+		log.Printf("[a2o] upstream=%s status=%d: %s", up.Name, resp.StatusCode, string(errBody))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(resp.StatusCode)
 		errResp, _ := json.Marshal(map[string]interface{}{
@@ -768,7 +755,7 @@ func handleMessagesConvert(w http.ResponseWriter, r *http.Request) {
 		}
 		var oResp openaiResponse
 		if err := json.Unmarshal(respBody, &oResp); err != nil {
-			log.Printf("[convert] cannot parse upstream response: %v  body=%s", err, string(respBody))
+			log.Printf("[a2o] cannot parse upstream response: %v  body=%s", err, string(respBody))
 			http.Error(w, "cannot parse upstream response", http.StatusBadGateway)
 			return
 		}
