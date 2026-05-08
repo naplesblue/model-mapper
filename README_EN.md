@@ -7,7 +7,8 @@ A lightweight reverse proxy that intercepts LLM API requests, remaps model names
 ## Features
 
 - **Model routing table** — Route Opus / Sonnet / Haiku to different upstreams, so providers like DeepSeek and MiMo can be mixed per model tier.
-- **Per-upstream model catalog** — Each upstream keeps its own model mappings; the routing table only selects which upstream handles the request.
+- **Per-upstream model catalog** — Each upstream keeps its own text and vision model mappings; the routing table only selects which upstream handles the request.
+- **Xiaomi vision model support** — Image requests can automatically switch to `mimo-v2-omni`, enabling Claude Desktop multimodal requests through MiMo.
 - **Protocol-aware dispatch** — Anthropic-compatible upstreams are passed through directly; OpenAI-compatible upstreams use automatic Anthropic ↔ OpenAI conversion with streaming SSE and tool use.
 - **Web UI** — Configure everything from the browser at `http://localhost:9483`.
 - **Security** — Binds to `127.0.0.1` by default, Origin/Referer CSRF protection, `config.json` saved with `0600` permissions. Set `MODEL_MAPPER_CONFIG` to override the config path.
@@ -50,7 +51,8 @@ Edit `config.json` (or use the Web UI) to set your upstream token:
         {"client_model": "claude-opus-4-6", "upstream_model": "deepseek-v4-pro"},
         {"client_model": "claude-sonnet-4-6", "upstream_model": "deepseek-v4-flash"},
         {"client_model": "claude-haiku-4-5", "upstream_model": "deepseek-v4-flash"}
-      ]
+      ],
+      "vision_mappings": []
     },
     {
       "name": "xiaomi-mimo",
@@ -62,6 +64,11 @@ Edit `config.json` (or use the Web UI) to set your upstream token:
         {"client_model": "claude-opus-4-6", "upstream_model": "mimo-2.5-pro"},
         {"client_model": "claude-sonnet-4-6", "upstream_model": "mimo-2.5"},
         {"client_model": "claude-haiku-4-5", "upstream_model": "mimo-2.5-flash"}
+      ],
+      "vision_mappings": [
+        {"client_model": "claude-opus-4-6", "upstream_model": "mimo-v2-omni"},
+        {"client_model": "claude-sonnet-4-6", "upstream_model": "mimo-v2-omni"},
+        {"client_model": "claude-haiku-4-5", "upstream_model": "mimo-v2-omni"}
       ]
     }
   ]
@@ -83,7 +90,8 @@ ANTHROPIC_BASE_URL=http://127.0.0.1:9483 ANTHROPIC_API_KEY=any claude
 |---|---|
 | `model_routes` | Client model → upstream index. Use this for mixed routing, such as Opus on DeepSeek and Haiku on MiMo. |
 | `default_upstream` | Fallback upstream when no `model_routes` entry matches. |
-| `upstreams[].mappings` | The model catalog for that upstream. Multiple upstreams can keep the same client model names and map them to different upstream model names. |
+| `upstreams[].mappings` | The text model catalog for that upstream. Multiple upstreams can keep the same client model names and map them to different upstream model names. |
+| `upstreams[].vision_mappings` | The image-capable model catalog for that upstream. Image requests prefer this mapping; leave it empty for upstreams without multimodal support. |
 | `upstreams[].protocol` | `anthropic` is passed through directly; `openai` enables Anthropic ↔ OpenAI conversion. |
 
 ## Deploy to Server (Linux)

@@ -12,12 +12,10 @@ import (
 	"time"
 )
 
-// findUpstream returns the configured upstream and target upstream model name
-// for the given client model. ModelRoutes decide which upstream handles a
-// client model; the selected upstream's own Mappings decide the target model.
-// If no explicit route exists, default_upstream is used as fallback, then the
-// remaining upstreams are searched for backward compatibility.
-func findUpstream(model string) (*UpstreamConfig, string) {
+// findUpstream returns the configured upstream and target upstream model name.
+// ModelRoutes decide which upstream handles a client model; the selected
+// upstream's Mappings or VisionMappings decide the target model.
+func findUpstream(model string, needsVision bool) (*UpstreamConfig, string, string) {
 	cfgMu.RLock()
 	defer cfgMu.RUnlock()
 
@@ -26,19 +24,19 @@ func findUpstream(model string) (*UpstreamConfig, string) {
 			continue
 		}
 		if route.Upstream < 0 || route.Upstream >= len(cfg.Upstreams) {
-			return nil, ""
+			return nil, "", ""
 		}
 		up := &cfg.Upstreams[route.Upstream]
-		if targetModel, ok := findMapping(up, model); ok {
-			return up, targetModel
-		}
-		return up, model
+		return resolveUpstreamModel(up, model, needsVision)
 	}
 
 	if cfg.DefaultUpstream >= 0 && cfg.DefaultUpstream < len(cfg.Upstreams) {
 		up := &cfg.Upstreams[cfg.DefaultUpstream]
-		if targetModel, ok := findMapping(up, model); ok {
-			return up, targetModel
+		if targetModel, ok := findTextMapping(up, model); ok {
+			if needsVision {
+				return resolveUpstreamModel(up, model, true)
+			}
+			return up, targetModel, ""
 		}
 	}
 
@@ -46,20 +44,75 @@ func findUpstream(model string) (*UpstreamConfig, string) {
 		if i == cfg.DefaultUpstream {
 			continue
 		}
-		if targetModel, ok := findMapping(&cfg.Upstreams[i], model); ok {
-			return &cfg.Upstreams[i], targetModel
+		if targetModel, ok := findTextMapping(&cfg.Upstreams[i], model); ok {
+			if needsVision {
+				return resolveUpstreamModel(&cfg.Upstreams[i], model, true)
+			}
+			return &cfg.Upstreams[i], targetModel, ""
 		}
 	}
-	return nil, ""
+	return nil, "", ""
 }
 
-func findMapping(up *UpstreamConfig, model string) (string, bool) {
-	for _, m := range up.Mappings {
+func resolveUpstreamModel(up *UpstreamConfig, model string, needsVision bool) (*UpstreamConfig, string, string) {
+	if needsVision {
+		if targetModel, ok := findVisionMapping(up, model); ok {
+			return up, targetModel, ""
+		}
+		if _, ok := findTextMapping(up, model); ok {
+			return up, "", fmt.Sprintf("upstream %s has no vision model configured for %s", up.Name, model)
+		}
+	}
+	if targetModel, ok := findTextMapping(up, model); ok {
+		return up, targetModel, ""
+	}
+	return up, model, ""
+}
+
+func findTextMapping(up *UpstreamConfig, model string) (string, bool) {
+	return findMapping(up.Mappings, model)
+}
+
+func findVisionMapping(up *UpstreamConfig, model string) (string, bool) {
+	return findMapping(up.VisionMappings, model)
+}
+
+func findMapping(mappings []ModelMapping, model string) (string, bool) {
+	for _, m := range mappings {
 		if strings.EqualFold(model, m.ClientModel) {
 			return m.UpstreamModel, true
 		}
 	}
 	return "", false
+}
+
+func requestHasImage(body []byte) bool {
+	var value interface{}
+	if err := json.Unmarshal(body, &value); err != nil {
+		return false
+	}
+	return containsAnthropicImage(value)
+}
+
+func containsAnthropicImage(value interface{}) bool {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		if typ, ok := v["type"].(string); ok && typ == "image" {
+			return true
+		}
+		for _, child := range v {
+			if containsAnthropicImage(child) {
+				return true
+			}
+		}
+	case []interface{}:
+		for _, child := range v {
+			if containsAnthropicImage(child) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // setAuthHeaders sets authentication headers on the outgoing request based on
@@ -235,7 +288,7 @@ func proxyHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Try to route by model; fall back to first upstream
 	var up *UpstreamConfig
-	var clientModel, targetModel string
+	var clientModel, targetModel, routeErr string
 
 	if len(body) > 0 {
 		var peek struct {
@@ -243,8 +296,21 @@ func proxyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if json.Unmarshal(body, &peek) == nil && peek.Model != "" {
 			clientModel = peek.Model
-			up, targetModel = findUpstream(clientModel)
+			up, targetModel, routeErr = findUpstream(clientModel, requestHasImage(body))
 		}
+	}
+
+	if routeErr != "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"type": "error",
+			"error": map[string]interface{}{
+				"type":    "invalid_request_error",
+				"message": routeErr,
+			},
+		})
+		return
 	}
 
 	if up == nil {

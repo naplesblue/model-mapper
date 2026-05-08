@@ -25,12 +25,13 @@ type ModelRoute struct {
 
 // UpstreamConfig defines a single upstream LLM provider.
 type UpstreamConfig struct {
-	Name     string         `json:"name"`      // "deepseek", "anthropic-direct"
-	URL      string         `json:"url"`       // base URL, e.g. "https://api.deepseek.com"
-	Token    string         `json:"token"`     // API key
-	AuthType string         `json:"auth_type"` // "anthropic" (x-api-key) or "openai" (Bearer)
-	Protocol string         `json:"protocol"`  // upstream's native protocol: "anthropic" | "openai"
-	Mappings []ModelMapping `json:"mappings"`  // client model → upstream model (first match wins)
+	Name           string         `json:"name"`                      // "deepseek", "anthropic-direct"
+	URL            string         `json:"url"`                       // base URL, e.g. "https://api.deepseek.com"
+	Token          string         `json:"token"`                     // API key
+	AuthType       string         `json:"auth_type"`                 // "anthropic" (x-api-key) or "openai" (Bearer)
+	Protocol       string         `json:"protocol"`                  // upstream's native protocol: "anthropic" | "openai"
+	Mappings       []ModelMapping `json:"mappings"`                  // client model → text upstream model
+	VisionMappings []ModelMapping `json:"vision_mappings,omitempty"` // client model → image-capable upstream model
 }
 
 // Config 是代理服务的全部配置，持久化到 config.json。

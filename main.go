@@ -98,7 +98,20 @@ func handleMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	clientModel := peek.Model
 
-	up, targetModel := findUpstream(clientModel)
+	hasImage := requestHasImage(body)
+	up, targetModel, routeErr := findUpstream(clientModel, hasImage)
+	if routeErr != "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"type": "error",
+			"error": map[string]interface{}{
+				"type":    "invalid_request_error",
+				"message": routeErr,
+			},
+		})
+		return
+	}
 	if up == nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
@@ -113,7 +126,11 @@ func handleMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if targetModel != clientModel {
-		log.Printf("[dispatch] model=%s -> %s  upstream=%s protocol=%s", clientModel, targetModel, up.Name, up.Protocol)
+		if hasImage {
+			log.Printf("[dispatch] model=%s -> %s  upstream=%s protocol=%s vision=true", clientModel, targetModel, up.Name, up.Protocol)
+		} else {
+			log.Printf("[dispatch] model=%s -> %s  upstream=%s protocol=%s", clientModel, targetModel, up.Name, up.Protocol)
+		}
 	} else {
 		log.Printf("[dispatch] model=%s  upstream=%s protocol=%s", clientModel, up.Name, up.Protocol)
 	}

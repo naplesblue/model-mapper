@@ -18,7 +18,8 @@
         {"client_model": "claude-opus-4-6", "upstream_model": "deepseek-v4-pro"},
         {"client_model": "claude-sonnet-4-6", "upstream_model": "deepseek-v4-flash"},
         {"client_model": "claude-haiku-4-5", "upstream_model": "deepseek-v4-flash"}
-      ]
+      ],
+      "vision_mappings": []
     },
     {
       "name": "xiaomi-mimo",
@@ -30,6 +31,11 @@
         {"client_model": "claude-opus-4-6", "upstream_model": "mimo-2.5-pro"},
         {"client_model": "claude-sonnet-4-6", "upstream_model": "mimo-2.5"},
         {"client_model": "claude-haiku-4-5", "upstream_model": "mimo-2.5-flash"}
+      ],
+      "vision_mappings": [
+        {"client_model": "claude-opus-4-6", "upstream_model": "mimo-v2-omni"},
+        {"client_model": "claude-sonnet-4-6", "upstream_model": "mimo-v2-omni"},
+        {"client_model": "claude-haiku-4-5", "upstream_model": "mimo-v2-omni"}
       ]
     }
   ]

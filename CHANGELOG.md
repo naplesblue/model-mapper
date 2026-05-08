@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.3] — 2026-05-08
+
+### Added
+- `vision_mappings` per upstream for routing image requests to image-capable models.
+- Xiaomi MiMo vision model support via `mimo-v2-omni` on the Anthropic-compatible endpoint.
+- Web UI fields for configuring text and image models separately per tier.
+- Regression tests for image request detection, vision routing, and missing vision-model errors.
+
+### Changed
+- Requests containing Anthropic image blocks now use `vision_mappings` instead of text `mappings`.
+- Sample config and README now document text versus image model mappings.
+
+### Fixed
+- Image requests no longer get sent to text-only upstream models such as `mimo-v2.5-pro`.
+- Upstreams without vision mappings now return a clear configuration error for image requests instead of forwarding to an unsupported model.
+
+---
+
 ## [1.2] — 2026-05-08
 
 ### Added

@@ -162,13 +162,14 @@ const DEFAULT_CLIENT_MODELS = {
 // State
 let defaultUpstreamIndex = -1;
 let routes = [];    // [{client_model, upstream_index}]
-let upstreams = []; // [{name, url, token, auth_type, protocol, models: {opus, sonnet, haiku}}]
+let upstreams = []; // [{name, url, token, auth_type, protocol, models: {...}, vision_models: {...}}]
 let statusTimer = null;
 
 function newUpstream() {
   return {
     name: '', url: '', token: '', auth_type: 'anthropic', protocol: 'anthropic',
     models: { opus: '', sonnet: '', haiku: '' },
+    vision_models: { opus: '', sonnet: '', haiku: '' },
   };
 }
 
@@ -219,13 +220,20 @@ function renderRoutes() {
     const upModel = getUpstreamModel(upIndex, key);
     return `<div class="field"><input type="text" value="${esc(upModel)}" readonly style="background:#f0f0f0;color:#555;cursor:default"></div>`;
   }).join('');
+  const visionModels = TIER_KEYS.map((key, i) => {
+    const r = routes[i] || { client_model: DEFAULT_CLIENT_MODELS[key], upstream_index: -1 };
+    const upIndex = r.upstream_index >= 0 ? r.upstream_index : defaultUpstreamIndex;
+    const upModel = getVisionModel(upIndex, key);
+    return `<div class="field"><input type="text" value="${esc(upModel)}" readonly style="background:#f0f0f0;color:#555;cursor:default"></div>`;
+  }).join('');
 
   container.innerHTML = `
     <div class="route-grid">
       <div></div>${tierHeaders}
       <div class="row-label">客户端模型</div>${clientModelInputs}
       <div class="row-label">上游</div>${upstreamSelects}
-      <div class="row-label">上游模型</div>${upstreamModels}
+      <div class="row-label">文本模型</div>${upstreamModels}
+      <div class="row-label">图片模型</div>${visionModels}
     </div>`;
 
   routes.forEach((r, i) => {
@@ -237,6 +245,11 @@ function renderRoutes() {
 function getUpstreamModel(upIndex, tierKey) {
   if (upIndex < 0 || upIndex >= upstreams.length) return '';
   return upstreams[upIndex].models[tierKey] || '';
+}
+
+function getVisionModel(upIndex, tierKey) {
+  if (upIndex < 0 || upIndex >= upstreams.length) return '';
+  return (upstreams[upIndex].vision_models || {})[tierKey] || '';
 }
 
 // ============ Upstream Cards ============
@@ -286,9 +299,16 @@ function renderUpstreams() {
         <div class="tier-row">
           <div class="tier-label">${TIERS[j]}</div>
           <div class="field upstream-model">
+            <label>文本模型</label>
             <input type="text" value="${esc(u.models[key] || '')}"
               placeholder="${DEFAULT_CLIENT_MODELS[key]}"
               onchange="upstreams[${i}].models['${key}'] = this.value.trim(); renderRoutes();">
+          </div>
+          <div class="field upstream-model">
+            <label>图片模型</label>
+            <input type="text" value="${esc((u.vision_models || {})[key] || '')}"
+              placeholder="不支持可留空"
+              onchange="upstreams[${i}].vision_models['${key}'] = this.value.trim(); renderRoutes();">
           </div>
         </div>
         `).join('')}
@@ -355,9 +375,11 @@ function collectAll() {
       auth_type: selects[0].value,
       protocol: selects[1].value,
       models: {},
+      vision_models: {},
     };
     TIER_KEYS.forEach((key, j) => {
-      u.models[key] = (inputs[3 + j] || {}).value ? inputs[3 + j].value.trim() : '';
+      u.models[key] = (inputs[3 + j * 2] || {}).value ? inputs[3 + j * 2].value.trim() : '';
+      u.vision_models[key] = (inputs[4 + j * 2] || {}).value ? inputs[4 + j * 2].value.trim() : '';
     });
     upstreams.push(u);
   });
@@ -375,11 +397,18 @@ async function save() {
   // Build per-upstream mappings from each upstream's model definitions
   const upstreamsData = upstreams.map(u => {
     const mappings = [];
+    const visionMappings = [];
     TIER_KEYS.forEach((key, i) => {
       if (u.models[key]) {
         mappings.push({
           client_model: routes[i].client_model || DEFAULT_CLIENT_MODELS[key],
           upstream_model: u.models[key],
+        });
+      }
+      if ((u.vision_models || {})[key]) {
+        visionMappings.push({
+          client_model: routes[i].client_model || DEFAULT_CLIENT_MODELS[key],
+          upstream_model: u.vision_models[key],
         });
       }
     });
@@ -390,6 +419,7 @@ async function save() {
       auth_type: u.auth_type,
       protocol: u.protocol,
       mappings,
+      vision_mappings: visionMappings,
     };
   });
 
@@ -436,11 +466,18 @@ async function load() {
   // Load upstreams
   upstreams = (c.upstreams || []).map(u => {
     const models = { opus: '', sonnet: '', haiku: '' };
+    const visionModels = { opus: '', sonnet: '', haiku: '' };
     (u.mappings || []).forEach(m => {
       const cm = (m.client_model || '').toLowerCase();
       if (cm.includes('opus')) models.opus = m.upstream_model || '';
       else if (cm.includes('sonnet')) models.sonnet = m.upstream_model || '';
       else if (cm.includes('haiku')) models.haiku = m.upstream_model || '';
+    });
+    (u.vision_mappings || []).forEach(m => {
+      const cm = (m.client_model || '').toLowerCase();
+      if (cm.includes('opus')) visionModels.opus = m.upstream_model || '';
+      else if (cm.includes('sonnet')) visionModels.sonnet = m.upstream_model || '';
+      else if (cm.includes('haiku')) visionModels.haiku = m.upstream_model || '';
     });
     return {
       name: u.name || '',
@@ -449,6 +486,7 @@ async function load() {
       auth_type: u.auth_type || 'anthropic',
       protocol: u.protocol || 'anthropic',
       models,
+      vision_models: visionModels,
     };
   });
 
@@ -456,6 +494,7 @@ async function load() {
   if (upstreams.length === 0 && (c.upstream_url || c.upstream_token)) {
     const map = c.model_map || {};
     const models = { opus: '', sonnet: '', haiku: '' };
+    const visionModels = { opus: '', sonnet: '', haiku: '' };
     Object.entries(map).forEach(([clientModel, upModel]) => {
       const cm = clientModel.toLowerCase();
       if (cm.includes('opus')) models.opus = upModel;
@@ -469,6 +508,7 @@ async function load() {
       auth_type: c.protocol || 'anthropic',
       protocol: c.protocol || 'anthropic',
       models,
+      vision_models: visionModels,
     }];
   }
 
