@@ -400,15 +400,26 @@ async function save() {
 
   collectAll();
 
-  // Build per-upstream mappings: each upstream's tier model definitions are
-  // ALWAYS persisted (even if no route currently points to it). The routing
-  // table only determines which upstream handles a request at runtime.
+  // Build per-upstream mappings: each tier's mapping is placed in the upstream
+  // that the routing table points to. If a route is unassigned, the first
+  // upstream to define that tier gets it. A tier model is only saved if the
+  // route explicitly routes there — this prevents duplicate client_model
+  // entries that would cause first-match-wins to ignore the routing table.
   const upstreamsData = upstreams.map((u, i) => {
     const mappings = [];
     TIER_KEYS.forEach((key, j) => {
-      if (u.models[key]) {
-        const clientModel = (routes[j] && routes[j].client_model) || DEFAULT_CLIENT_MODELS[key];
-        mappings.push({ client_model: clientModel, upstream_model: u.models[key] });
+      if (!u.models[key]) return;
+      const clientModel = (routes[j] && routes[j].client_model) || DEFAULT_CLIENT_MODELS[key];
+      const routeUpIdx = (routes[j] && routes[j].upstream_index >= 0) ? routes[j].upstream_index : -1;
+      // Place mapping in this upstream only if route explicitly points here
+      if (routeUpIdx < 0) {
+        // No route assigned — save in the first upstream that defines this tier
+        const firstDefiner = upstreams.findIndex(other => other.models[key]);
+        if (firstDefiner === i) {
+          mappings.push({ client_model, upstream_model: u.models[key] });
+        }
+      } else if (routeUpIdx === i) {
+        mappings.push({ client_model, upstream_model: u.models[key] });
       }
     });
     return {
