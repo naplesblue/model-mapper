@@ -215,7 +215,8 @@ func sameOrigin(r *http.Request) bool {
 	if err != nil {
 		return false
 	}
-	return u.Host == r.Host
+	// Accept if hostname matches, ignoring port (handles reverse proxy mismatch)
+	return u.Hostname() == r.Host || u.Host == r.Host
 }
 
 func handleGetConfig(w http.ResponseWriter, _ *http.Request) {
