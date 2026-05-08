@@ -121,11 +121,21 @@
     </div>
   </div>
 
+  <!-- ===== Default Upstream Selector ===== -->
+  <hr class="divider">
+  <div class="section-title">默认上游</div>
+  <div class="field">
+    <select id="default-upstream-select" onchange="defaultUpstreamIndex = parseInt(this.value); renderRoutes();">
+      <option value="-1" disabled>— 请添加上游 —</option>
+    </select>
+    <p class="hint">没有命中模型路由时使用。切换后需保存生效。</p>
+  </div>
+
   <!-- ===== Routing Table (3 fixed tiers) ===== -->
   <hr class="divider">
   <div class="section-title">模型路由表</div>
   <div class="route-table" id="routes-container"></div>
-  <p class="hint">切换上游：改下拉框。切换上游模型名：去下方对应上游卡片修改。</p>
+  <p class="hint">路由表只决定每个客户端模型走哪个上游；上游自己的模型名在下方上游卡片里维护。</p>
 
   <!-- ===== Upstream Configs ===== -->
   <hr class="divider">
@@ -141,8 +151,8 @@
 
 <script>
 // 3 fixed tiers
-const TIERS = ['Opus', 'Sonnet', 'Haiku'];
 const TIER_KEYS = ['opus', 'sonnet', 'haiku'];
+const TIERS = ['Opus', 'Sonnet', 'Haiku'];
 const DEFAULT_CLIENT_MODELS = {
   opus: 'claude-opus-4-6',
   sonnet: 'claude-sonnet-4-6',
@@ -150,6 +160,7 @@ const DEFAULT_CLIENT_MODELS = {
 };
 
 // State
+let defaultUpstreamIndex = -1;
 let routes = [];    // [{client_model, upstream_index}]
 let upstreams = []; // [{name, url, token, auth_type, protocol, models: {opus, sonnet, haiku}}]
 let statusTimer = null;
@@ -161,34 +172,51 @@ function newUpstream() {
   };
 }
 
+function defaultRoutes() {
+  return TIER_KEYS.map(key => ({
+    client_model: DEFAULT_CLIENT_MODELS[key],
+    upstream_index: -1,
+  }));
+}
+
+// ============ Default Upstream Selector ============
+
+function renderDefaultUpstreamSelect() {
+  const sel = document.getElementById('default-upstream-select');
+  if (!sel) return;
+  sel.innerHTML = upstreams.map((u, i) =>
+    `<option value="${i}" ${i === defaultUpstreamIndex ? 'selected' : ''}>${u.name || '(未命名 #'+(i+1)+')'}</option>`
+  ).join('');
+  if (upstreams.length === 0) {
+    sel.innerHTML = '<option value="-1" disabled selected>— 请添加上游 —</option>';
+  }
+  sel.value = defaultUpstreamIndex >= 0 && defaultUpstreamIndex < upstreams.length
+    ? String(defaultUpstreamIndex) : '-1';
+}
+
 // ============ Routing Table ============
 
 function renderRoutes() {
   const container = document.getElementById('routes-container');
+  if (!container) return;
+
   const upOptions = upstreams.map((u, i) =>
     `<option value="${i}">${u.name || '(未命名 #'+(i+1)+')'}</option>`
   ).join('');
 
-  // Transposed grid: rows = fields, columns = tiers
-  // Row 1: tier headers (Opus / Sonnet / Haiku)
-  // Row 2: client model inputs
-  // Row 3: upstream selects
-  // Row 4: upstream model (readonly)
   const tierHeaders = TIERS.map(t => `<div class="tier-header">${t}</div>`).join('');
-
   const clientModelInputs = TIER_KEYS.map((key, i) => {
     const r = routes[i] || { client_model: DEFAULT_CLIENT_MODELS[key], upstream_index: -1 };
     return `<div class="field"><input type="text" value="${esc(r.client_model)}" placeholder="${DEFAULT_CLIENT_MODELS[key]}" onchange="routes[${i}].client_model = this.value.trim()"></div>`;
   }).join('');
-
   const upstreamSelects = TIER_KEYS.map((key, i) => {
     const r = routes[i] || { client_model: DEFAULT_CLIENT_MODELS[key], upstream_index: -1 };
-    return `<div class="field"><select onchange="routes[${i}].upstream_index = parseInt(this.value); renderRoutes()" id="route-select-${i}"><option value="-1" ${r.upstream_index < 0 ? 'selected' : ''} disabled>—</option>${upOptions}</select></div>`;
+    return `<div class="field"><select onchange="routes[${i}].upstream_index = parseInt(this.value); renderRoutes()" id="route-select-${i}"><option value="-1" ${r.upstream_index < 0 ? 'selected' : ''}>默认</option>${upOptions}</select></div>`;
   }).join('');
-
   const upstreamModels = TIER_KEYS.map((key, i) => {
     const r = routes[i] || { client_model: DEFAULT_CLIENT_MODELS[key], upstream_index: -1 };
-    const upModel = getUpstreamModel(r.upstream_index, key);
+    const upIndex = r.upstream_index >= 0 ? r.upstream_index : defaultUpstreamIndex;
+    const upModel = getUpstreamModel(upIndex, key);
     return `<div class="field"><input type="text" value="${esc(upModel)}" readonly style="background:#f0f0f0;color:#555;cursor:default"></div>`;
   }).join('');
 
@@ -200,7 +228,6 @@ function renderRoutes() {
       <div class="row-label">上游模型</div>${upstreamModels}
     </div>`;
 
-  // Set selects
   routes.forEach((r, i) => {
     const sel = document.getElementById('route-select-' + i);
     if (sel) sel.value = String(r.upstream_index);
@@ -225,7 +252,7 @@ function renderUpstreams() {
       <div class="field">
         <label>名称</label>
         <input type="text" value="${esc(u.name)}" placeholder="deepseek"
-          onchange="upstreams[${i}].name = this.value.trim(); renderRoutes();">
+          onchange="upstreams[${i}].name = this.value.trim(); renderDefaultUpstreamSelect(); renderRoutes();">
       </div>
       <div class="field">
         <label>URL</label>
@@ -272,7 +299,11 @@ function renderUpstreams() {
 
 function addUpstream() {
   upstreams.push(newUpstream());
+  if (defaultUpstreamIndex < 0) {
+    defaultUpstreamIndex = 0;
+  }
   renderUpstreams();
+  renderDefaultUpstreamSelect();
   renderRoutes();
 }
 
@@ -282,16 +313,36 @@ function removeUpstream(index) {
     if (r.upstream_index === index) r.upstream_index = -1;
     else if (r.upstream_index > index) r.upstream_index--;
   });
+  if (defaultUpstreamIndex === index) {
+    defaultUpstreamIndex = -1;
+  } else if (defaultUpstreamIndex > index) {
+    defaultUpstreamIndex--;
+  }
+  if (defaultUpstreamIndex < 0 && upstreams.length > 0) {
+    defaultUpstreamIndex = 0;
+  }
   renderUpstreams();
+  renderDefaultUpstreamSelect();
   renderRoutes();
 }
 
 // ============ Persistence ============
 
-function collectAll() {
-  // routes[] is already live via onchange handlers — nothing to collect
+function collectRoutes() {
+  const routeGrid = document.querySelector('.route-grid');
+  if (!routeGrid) return;
 
-  // Upstreams
+  const inputs = Array.from(routeGrid.querySelectorAll('input:not([readonly])'));
+  const selects = Array.from(routeGrid.querySelectorAll('select'));
+  routes = TIER_KEYS.map((key, i) => ({
+    client_model: (inputs[i] && inputs[i].value.trim()) || DEFAULT_CLIENT_MODELS[key],
+    upstream_index: selects[i] ? parseInt(selects[i].value, 10) : -1,
+  }));
+}
+
+function collectAll() {
+  collectRoutes();
+
   const cards = document.querySelectorAll('.upstream-card');
   upstreams = [];
   cards.forEach(card => {
@@ -305,7 +356,6 @@ function collectAll() {
       protocol: selects[1].value,
       models: {},
     };
-    // Next 3 inputs are the tier model names
     TIER_KEYS.forEach((key, j) => {
       u.models[key] = (inputs[3 + j] || {}).value ? inputs[3 + j].value.trim() : '';
     });
@@ -313,22 +363,79 @@ function collectAll() {
   });
 }
 
+async function save() {
+  const btn = document.getElementById('save-btn');
+  const status = document.getElementById('status');
+  btn.disabled = true;
+  status.textContent = '';
+  status.className = 'status';
+
+  collectAll();
+
+  // Build per-upstream mappings from each upstream's model definitions
+  const upstreamsData = upstreams.map(u => {
+    const mappings = [];
+    TIER_KEYS.forEach((key, i) => {
+      if (u.models[key]) {
+        mappings.push({
+          client_model: routes[i].client_model || DEFAULT_CLIENT_MODELS[key],
+          upstream_model: u.models[key],
+        });
+      }
+    });
+    return {
+      name: u.name,
+      url: u.url,
+      token: u.token,
+      auth_type: u.auth_type,
+      protocol: u.protocol,
+      mappings,
+    };
+  });
+
+  const body = {
+    bind_host: document.getElementById('bind_host').value.trim(),
+    port: parseInt(document.getElementById('port').value, 10) || 9483,
+    default_upstream: defaultUpstreamIndex,
+    model_routes: routes
+      .filter(r => r.client_model && r.upstream_index >= 0)
+      .map(r => ({ client_model: r.client_model, upstream: r.upstream_index })),
+    upstreams: upstreamsData,
+  };
+
+  try {
+    const res = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      status.textContent = '已保存';
+      status.className = 'status ok';
+    } else {
+      status.textContent = '保存失败 ' + res.status;
+      status.className = 'status err';
+    }
+  } catch (e) {
+    status.textContent = '网络错误';
+    status.className = 'status err';
+  }
+
+  btn.disabled = false;
+  if (statusTimer) clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => { status.textContent = ''; }, 3000);
+}
+
 async function load() {
   const res = await fetch('/api/config');
   const c = await res.json();
   document.getElementById('bind_host').value = c.bind_host || '127.0.0.1';
   document.getElementById('port').value = c.port || 9483;
-
-  // Init routes for 3 tiers
-  routes = TIER_KEYS.map(key => ({
-    client_model: DEFAULT_CLIENT_MODELS[key],
-    upstream_index: -1,
-  }));
+  routes = defaultRoutes();
 
   // Load upstreams
   upstreams = (c.upstreams || []).map(u => {
     const models = { opus: '', sonnet: '', haiku: '' };
-    // Parse mappings[] into tiered models
     (u.mappings || []).forEach(m => {
       const cm = (m.client_model || '').toLowerCase();
       if (cm.includes('opus')) models.opus = m.upstream_model || '';
@@ -365,100 +472,35 @@ async function load() {
     }];
   }
 
-  // Auto-fill route upstream_index from existing mappings
-  upstreams.forEach((u, i) => {
-    TIER_KEYS.forEach((key, j) => {
-      if (u.models[key] && routes[j].upstream_index < 0) {
-        routes[j].upstream_index = i;
-        routes[j].client_model = DEFAULT_CLIENT_MODELS[key];
-      }
-    });
-  });
+  // Set default upstream
+  defaultUpstreamIndex = (c.default_upstream >= 0 && c.default_upstream < upstreams.length)
+    ? c.default_upstream
+    : (upstreams.length > 0 ? 0 : -1);
 
-  // Also check config's upstreams mappings for client_model
-  (c.upstreams || []).forEach((u, i) => {
-    (u.mappings || []).forEach(m => {
-      TIER_KEYS.forEach((key, j) => {
-        if (m.client_model && m.client_model.toLowerCase().includes(key)) {
-          routes[j].client_model = m.client_model;
-          routes[j].upstream_index = i;
-        }
-      });
-    });
+  routes.forEach((r, i) => {
+    const key = TIER_KEYS[i];
+    const savedRoute = (c.model_routes || []).find(route =>
+      (route.client_model || '').toLowerCase() === r.client_model.toLowerCase() ||
+      (route.client_model || '').toLowerCase().includes(key)
+    );
+    if (savedRoute && savedRoute.upstream >= 0 && savedRoute.upstream < upstreams.length) {
+      routes[i].client_model = savedRoute.client_model || r.client_model;
+      routes[i].upstream_index = savedRoute.upstream;
+      return;
+    }
+
+    const firstMatch = (c.upstreams || []).findIndex(u =>
+      (u.mappings || []).some(m =>
+        (m.client_model || '').toLowerCase() === r.client_model.toLowerCase() ||
+        (m.client_model || '').toLowerCase().includes(key)
+      )
+    );
+    routes[i].upstream_index = firstMatch >= 0 ? firstMatch : defaultUpstreamIndex;
   });
 
   renderUpstreams();
+  renderDefaultUpstreamSelect();
   renderRoutes();
-}
-
-async function save() {
-  const btn = document.getElementById('save-btn');
-  const status = document.getElementById('status');
-  btn.disabled = true;
-  status.textContent = '';
-  status.className = 'status';
-
-  collectAll();
-
-  // Build per-upstream mappings: each tier's mapping is placed in the upstream
-  // that the routing table points to. If a route is unassigned, the first
-  // upstream to define that tier gets it. A tier model is only saved if the
-  // route explicitly routes there — this prevents duplicate client_model
-  // entries that would cause first-match-wins to ignore the routing table.
-  const upstreamsData = upstreams.map((u, i) => {
-    const mappings = [];
-    TIER_KEYS.forEach((key, j) => {
-      if (!u.models[key]) return;
-      const clientModel = (routes[j] && routes[j].client_model) || DEFAULT_CLIENT_MODELS[key];
-      const routeUpIdx = (routes[j] && routes[j].upstream_index >= 0) ? routes[j].upstream_index : -1;
-      // Place mapping in this upstream only if route explicitly points here
-      if (routeUpIdx < 0) {
-        // No route assigned — save in the first upstream that defines this tier
-        const firstDefiner = upstreams.findIndex(other => other.models[key]);
-        if (firstDefiner === i) {
-          mappings.push({ client_model, upstream_model: u.models[key] });
-        }
-      } else if (routeUpIdx === i) {
-        mappings.push({ client_model, upstream_model: u.models[key] });
-      }
-    });
-    return {
-      name: u.name,
-      url: u.url,
-      token: u.token,
-      auth_type: u.auth_type,
-      protocol: u.protocol,
-      mappings,
-    };
-  });
-
-  const body = {
-    bind_host: document.getElementById('bind_host').value.trim(),
-    port: parseInt(document.getElementById('port').value, 10) || 9483,
-    upstreams: upstreamsData,
-  };
-
-  try {
-    const res = await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
-      status.textContent = '已保存';
-      status.className = 'status ok';
-    } else {
-      status.textContent = '保存失败 ' + res.status;
-      status.className = 'status err';
-    }
-  } catch (e) {
-    status.textContent = '网络错误';
-    status.className = 'status err';
-  }
-
-  btn.disabled = false;
-  if (statusTimer) clearTimeout(statusTimer);
-  statusTimer = setTimeout(() => { status.textContent = ''; }, 3000);
 }
 
 function esc(s) {

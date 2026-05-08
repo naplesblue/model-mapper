@@ -1,6 +1,12 @@
 {
   "bind_host": "127.0.0.1",
   "port": 9483,
+  "default_upstream": 0,
+  "model_routes": [
+    {"client_model": "claude-opus-4-6", "upstream": 0},
+    {"client_model": "claude-sonnet-4-6", "upstream": 0},
+    {"client_model": "claude-haiku-4-5", "upstream": 1}
+  ],
   "upstreams": [
     {
       "name": "deepseek-anthropic",
@@ -11,7 +17,7 @@
       "mappings": [
         {"client_model": "claude-opus-4-6", "upstream_model": "deepseek-v4-pro"},
         {"client_model": "claude-sonnet-4-6", "upstream_model": "deepseek-v4-flash"},
-        {"client_model": "claude-3-5-sonnet-20241022", "upstream_model": "deepseek-v4-flash"}
+        {"client_model": "claude-haiku-4-5", "upstream_model": "deepseek-v4-flash"}
       ]
     },
     {
@@ -21,7 +27,9 @@
       "auth_type": "anthropic",
       "protocol": "anthropic",
       "mappings": [
-        {"client_model": "claude-opus-4-6-mimo", "upstream_model": "mimo-2.5-pro"}
+        {"client_model": "claude-opus-4-6", "upstream_model": "mimo-2.5-pro"},
+        {"client_model": "claude-sonnet-4-6", "upstream_model": "mimo-2.5"},
+        {"client_model": "claude-haiku-4-5", "upstream_model": "mimo-2.5-flash"}
       ]
     }
   ]

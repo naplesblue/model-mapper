@@ -6,10 +6,11 @@ A lightweight reverse proxy that intercepts LLM API requests, remaps model names
 
 ## Features
 
-- **Model name mapping** — Route `claude-opus-4-6` → `deepseek-v4-pro`, `claude-sonnet-4-6` → `deepseek-v4-flash`, etc. Each model maps independently.
-- **Dual mode** — `passthrough` for Anthropic-compatible upstreams, `anthropic-to-openai` for OpenAI-compatible upstreams (full protocol conversion with streaming SSE, tool use, and tool results).
+- **Model routing table** — Route Opus / Sonnet / Haiku to different upstreams, so providers like DeepSeek and MiMo can be mixed per model tier.
+- **Per-upstream model catalog** — Each upstream keeps its own model mappings; the routing table only selects which upstream handles the request.
+- **Protocol-aware dispatch** — Anthropic-compatible upstreams are passed through directly; OpenAI-compatible upstreams use automatic Anthropic ↔ OpenAI conversion with streaming SSE and tool use.
 - **Web UI** — Configure everything from the browser at `http://localhost:9483`.
-- **Security** — Binds to `127.0.0.1` by default, Origin/Referer CSRF protection, `config.json` saved with `0600` permissions.
+- **Security** — Binds to `127.0.0.1` by default, Origin/Referer CSRF protection, `config.json` saved with `0600` permissions. Set `MODEL_MAPPER_CONFIG` to override the config path.
 - **Single binary** — No dependencies. Cross-compiles to macOS arm64 and Linux amd64.
 
 ## Quick Start
@@ -32,15 +33,38 @@ Edit `config.json` (or use the Web UI) to set your upstream token:
 {
   "bind_host": "127.0.0.1",
   "port": 9483,
-  "upstream_url": "https://api.deepseek.com/anthropic",
-  "upstream_token": "sk-your-key-here",
-  "protocol": "anthropic",
-  "mode": "passthrough",
-  "model_map": {
-    "claude-opus-4-6": "deepseek-v4-pro",
-    "claude-sonnet-4-6": "deepseek-v4-flash",
-    "claude-3-5-sonnet-20241022": "deepseek-v4-flash"
-  }
+  "default_upstream": 0,
+  "model_routes": [
+    {"client_model": "claude-opus-4-6", "upstream": 0},
+    {"client_model": "claude-sonnet-4-6", "upstream": 0},
+    {"client_model": "claude-haiku-4-5", "upstream": 1}
+  ],
+  "upstreams": [
+    {
+      "name": "deepseek-anthropic",
+      "url": "https://api.deepseek.com/anthropic",
+      "token": "sk-your-deepseek-key",
+      "auth_type": "anthropic",
+      "protocol": "anthropic",
+      "mappings": [
+        {"client_model": "claude-opus-4-6", "upstream_model": "deepseek-v4-pro"},
+        {"client_model": "claude-sonnet-4-6", "upstream_model": "deepseek-v4-flash"},
+        {"client_model": "claude-haiku-4-5", "upstream_model": "deepseek-v4-flash"}
+      ]
+    },
+    {
+      "name": "xiaomi-mimo",
+      "url": "https://api.xiaomimimo.com/anthropic",
+      "token": "tp-your-mimo-key",
+      "auth_type": "anthropic",
+      "protocol": "anthropic",
+      "mappings": [
+        {"client_model": "claude-opus-4-6", "upstream_model": "mimo-2.5-pro"},
+        {"client_model": "claude-sonnet-4-6", "upstream_model": "mimo-2.5"},
+        {"client_model": "claude-haiku-4-5", "upstream_model": "mimo-2.5-flash"}
+      ]
+    }
+  ]
 }
 ```
 
@@ -53,12 +77,14 @@ ANTHROPIC_BASE_URL=http://127.0.0.1:9483 ANTHROPIC_API_KEY=any claude
 # Claude Desktop — set Base URL to http://127.0.0.1:9483
 ```
 
-## Modes
+## Configuration Model
 
-| Mode | `upstream_url` | Use case |
-|---|---|---|
-| `passthrough` | Anthropic-compatible endpoint (e.g. `api.deepseek.com/anthropic`) | Upstream natively speaks Anthropic protocol. Only model names are remapped. |
-| `anthropic-to-openai` | OpenAI-compatible endpoint (e.g. `api.deepseek.com`) | Full protocol conversion: Anthropic requests → OpenAI, OpenAI responses → Anthropic. Supports streaming, tool use, and tool results. |
+| Field | Purpose |
+|---|---|
+| `model_routes` | Client model → upstream index. Use this for mixed routing, such as Opus on DeepSeek and Haiku on MiMo. |
+| `default_upstream` | Fallback upstream when no `model_routes` entry matches. |
+| `upstreams[].mappings` | The model catalog for that upstream. Multiple upstreams can keep the same client model names and map them to different upstream model names. |
+| `upstreams[].protocol` | `anthropic` is passed through directly; `openai` enables Anthropic ↔ OpenAI conversion. |
 
 ## Deploy to Server (Linux)
 

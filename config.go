@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -14,6 +15,12 @@ import (
 type ModelMapping struct {
 	ClientModel   string `json:"client_model"`
 	UpstreamModel string `json:"upstream_model"`
+}
+
+// ModelRoute selects which upstream handles a client-facing model.
+type ModelRoute struct {
+	ClientModel string `json:"client_model"`
+	Upstream    int    `json:"upstream"` // index into Upstreams
 }
 
 // UpstreamConfig defines a single upstream LLM provider.
@@ -28,9 +35,11 @@ type UpstreamConfig struct {
 
 // Config 是代理服务的全部配置，持久化到 config.json。
 type Config struct {
-	BindHost  string           `json:"bind_host"`
-	Port      int              `json:"port"`
-	Upstreams []UpstreamConfig `json:"upstreams"`
+	BindHost        string           `json:"bind_host"`
+	Port            int              `json:"port"`
+	DefaultUpstream int              `json:"default_upstream"` // index into Upstreams, -1 = none
+	ModelRoutes     []ModelRoute     `json:"model_routes"`     // client model → upstream index
+	Upstreams       []UpstreamConfig `json:"upstreams"`
 
 	// Legacy fields kept for backward-compat parsing during migration.
 	UpstreamURL   string `json:"upstream_url,omitempty"`
@@ -41,8 +50,14 @@ type Config struct {
 
 func defaultConfig() Config {
 	return Config{
-		BindHost: "127.0.0.1",
-		Port:     9483,
+		BindHost:        "127.0.0.1",
+		Port:            9483,
+		DefaultUpstream: 0,
+		ModelRoutes: []ModelRoute{
+			{ClientModel: "claude-opus-4-6", Upstream: 0},
+			{ClientModel: "claude-sonnet-4-6", Upstream: 0},
+			{ClientModel: "claude-haiku-4-5", Upstream: 0},
+		},
 		Upstreams: []UpstreamConfig{
 			{
 				Name:     "deepseek-anthropic",
@@ -68,12 +83,33 @@ var (
 	cfgPath string
 )
 
+const configFileName = "config.json"
+
 func configFilePath() string {
-	exe, err := os.Executable()
-	if err != nil {
-		return "config.json"
+	if configured := os.Getenv("MODEL_MAPPER_CONFIG"); configured != "" {
+		return configured
 	}
-	return filepath.Join(filepath.Dir(exe), "config.json")
+
+	wd, wdErr := os.Getwd()
+	if wdErr == nil {
+		wdPath := filepath.Join(wd, configFileName)
+		if _, err := os.Stat(wdPath); err == nil {
+			return wdPath
+		}
+	}
+
+	exe, exeErr := os.Executable()
+	if exeErr == nil {
+		exePath := filepath.Join(filepath.Dir(exe), configFileName)
+		if _, err := os.Stat(exePath); err == nil {
+			return exePath
+		}
+	}
+
+	if wdErr == nil {
+		return filepath.Join(wd, configFileName)
+	}
+	return configFileName
 }
 
 func loadConfig() {
@@ -119,7 +155,7 @@ func loadConfig() {
 		c.Protocol = ""
 		c.Mode = ""
 		log.Printf("[config] migrated original single-upstream config")
-		cfg = c
+		cfg = normalizeConfig(c)
 		saveConfig()
 		return
 	}
@@ -128,12 +164,87 @@ func loadConfig() {
 	if needsModelMigration(data) {
 		c = migrateModelsToMappings(data, c)
 		log.Printf("[config] migrated Models[]+model_map to per-upstream Mappings[]")
-		cfg = c
+		cfg = normalizeConfig(c)
 		saveConfig()
 		return
 	}
 
-	cfg = c
+	cfg = normalizeConfig(c)
+}
+
+func normalizeConfig(c Config) Config {
+	if len(c.Upstreams) == 0 {
+		c.DefaultUpstream = -1
+		c.ModelRoutes = nil
+	} else if c.DefaultUpstream < 0 || c.DefaultUpstream >= len(c.Upstreams) {
+		c.DefaultUpstream = 0
+	}
+
+	if len(c.Upstreams) > 0 {
+		c.ModelRoutes = normalizeModelRoutes(c)
+	}
+
+	// Keep legacy fields readable during migration, but do not keep emitting
+	// stale single-upstream settings once current-format upstreams exist.
+	if len(c.Upstreams) > 0 {
+		c.UpstreamURL = ""
+		c.UpstreamToken = ""
+		c.Protocol = ""
+		c.Mode = ""
+	}
+	return c
+}
+
+func normalizeModelRoutes(c Config) []ModelRoute {
+	routes := make([]ModelRoute, 0, len(c.ModelRoutes))
+	seen := make(map[string]bool, len(c.ModelRoutes))
+	for _, r := range c.ModelRoutes {
+		if r.ClientModel == "" || r.Upstream < 0 || r.Upstream >= len(c.Upstreams) {
+			continue
+		}
+		key := strings.ToLower(r.ClientModel)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		routes = append(routes, r)
+	}
+	if len(routes) > 0 {
+		return routes
+	}
+	return inferModelRoutes(c)
+}
+
+func inferModelRoutes(c Config) []ModelRoute {
+	routes := []ModelRoute{}
+	seen := map[string]bool{}
+
+	add := func(clientModel string, upstream int) {
+		if clientModel == "" || upstream < 0 || upstream >= len(c.Upstreams) {
+			return
+		}
+		key := strings.ToLower(clientModel)
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		routes = append(routes, ModelRoute{ClientModel: clientModel, Upstream: upstream})
+	}
+
+	if c.DefaultUpstream >= 0 && c.DefaultUpstream < len(c.Upstreams) {
+		for _, m := range c.Upstreams[c.DefaultUpstream].Mappings {
+			add(m.ClientModel, c.DefaultUpstream)
+		}
+	}
+	for i, up := range c.Upstreams {
+		if i == c.DefaultUpstream {
+			continue
+		}
+		for _, m := range up.Mappings {
+			add(m.ClientModel, i)
+		}
+	}
+	return routes
 }
 
 // needsModelMigration checks if the raw JSON contains old-style Models[] or model_map fields.
@@ -253,7 +364,7 @@ func handlePostConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	cfg = patched
+	cfg = normalizeConfig(patched)
 	saveConfig()
 
 	w.Header().Set("Content-Type", "application/json")

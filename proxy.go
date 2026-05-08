@@ -12,20 +12,54 @@ import (
 	"time"
 )
 
-// findUpstream returns the UpstreamConfig and target upstream model name for the
-// given client model. Searches all upstreams' Mappings (case-insensitive, first
-// match wins). Returns (nil, "") if no upstream handles this model.
+// findUpstream returns the configured upstream and target upstream model name
+// for the given client model. ModelRoutes decide which upstream handles a
+// client model; the selected upstream's own Mappings decide the target model.
+// If no explicit route exists, default_upstream is used as fallback, then the
+// remaining upstreams are searched for backward compatibility.
 func findUpstream(model string) (*UpstreamConfig, string) {
 	cfgMu.RLock()
 	defer cfgMu.RUnlock()
+
+	for _, route := range cfg.ModelRoutes {
+		if !strings.EqualFold(model, route.ClientModel) {
+			continue
+		}
+		if route.Upstream < 0 || route.Upstream >= len(cfg.Upstreams) {
+			return nil, ""
+		}
+		up := &cfg.Upstreams[route.Upstream]
+		if targetModel, ok := findMapping(up, model); ok {
+			return up, targetModel
+		}
+		return up, model
+	}
+
+	if cfg.DefaultUpstream >= 0 && cfg.DefaultUpstream < len(cfg.Upstreams) {
+		up := &cfg.Upstreams[cfg.DefaultUpstream]
+		if targetModel, ok := findMapping(up, model); ok {
+			return up, targetModel
+		}
+	}
+
 	for i := range cfg.Upstreams {
-		for _, m := range cfg.Upstreams[i].Mappings {
-			if strings.EqualFold(model, m.ClientModel) {
-				return &cfg.Upstreams[i], m.UpstreamModel
-			}
+		if i == cfg.DefaultUpstream {
+			continue
+		}
+		if targetModel, ok := findMapping(&cfg.Upstreams[i], model); ok {
+			return &cfg.Upstreams[i], targetModel
 		}
 	}
 	return nil, ""
+}
+
+func findMapping(up *UpstreamConfig, model string) (string, bool) {
+	for _, m := range up.Mappings {
+		if strings.EqualFold(model, m.ClientModel) {
+			return m.UpstreamModel, true
+		}
+	}
+	return "", false
 }
 
 // setAuthHeaders sets authentication headers on the outgoing request based on
@@ -214,9 +248,11 @@ func proxyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if up == nil {
-		// Default: first upstream
+		// Default: use default_upstream if valid, otherwise first upstream
 		cfgMu.RLock()
-		if len(cfg.Upstreams) > 0 {
+		if cfg.DefaultUpstream >= 0 && cfg.DefaultUpstream < len(cfg.Upstreams) {
+			up = &cfg.Upstreams[cfg.DefaultUpstream]
+		} else if len(cfg.Upstreams) > 0 {
 			up = &cfg.Upstreams[0]
 		}
 		cfgMu.RUnlock()

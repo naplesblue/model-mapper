@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2] — 2026-05-08
+
+### Added
+- Explicit `model_routes` config for choosing which upstream handles each client-facing model.
+- Web UI model routing table now preserves each upstream's full model catalog while allowing per-tier mixed routing.
+- Regression test covering mixed routing when multiple upstreams define the same client model names.
+- `MODEL_MAPPER_CONFIG` environment variable for selecting a config file path.
+
+### Changed
+- Request dispatch now resolves upstream selection from `model_routes` first, then falls back to `default_upstream`.
+- Documentation and sample config now describe the `model_routes` + `upstreams[].mappings[]` configuration model.
+
+### Fixed
+- New processes started from the project directory now read the local `config.json` instead of only checking the executable directory.
+- Web UI add-upstream flow now works after fixing a JavaScript parse error.
+- Mixed upstream routing no longer collapses all Opus / Sonnet / Haiku requests onto the global default upstream.
+
+---
+
 ## [1.11] — 2026-05-08
 
 ### Added

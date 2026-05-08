@@ -6,10 +6,11 @@
 
 ## 功能特性
 
-- **模型名映射** — 将 `claude-opus-4-6` → `deepseek-v4-pro`、`claude-sonnet-4-6` → `deepseek-v4-flash` 等，每个模型独立映射。
-- **双工作模式** — `passthrough` 透传模式适配 Anthropic 兼容上游；`anthropic-to-openai` 转换模式适配 OpenAI 兼容上游（完整协议转换，支持流式 SSE、Tool Use）。
+- **模型路由表** — Opus / Sonnet / Haiku 可分别选择不同上游，支持 DeepSeek、MiMo 等模型混搭。
+- **上游模型目录** — 每个上游保留自己的模型名映射；路由表只决定请求走哪个上游，不会破坏上游映射关系。
+- **协议自适配** — Anthropic 兼容上游直接透传；OpenAI 兼容上游自动做 Anthropic ↔ OpenAI 协议转换（支持流式 SSE、Tool Use）。
 - **Web 管理界面** — 在浏览器中配置一切，地址 `http://localhost:9483`。
-- **安全防护** — 默认绑定 `127.0.0.1`，Origin/Referer CSRF 校验，`config.json` 以 `0600` 权限保存。
+- **安全防护** — 默认绑定 `127.0.0.1`，Origin/Referer CSRF 校验，`config.json` 以 `0600` 权限保存。可用 `MODEL_MAPPER_CONFIG` 指定配置路径。
 - **单文件部署** — 零依赖，支持交叉编译至 macOS arm64 和 Linux amd64。
 
 ## 快速开始
@@ -32,15 +33,38 @@ make build
 {
   "bind_host": "127.0.0.1",
   "port": 9483,
-  "upstream_url": "https://api.deepseek.com/anthropic",
-  "upstream_token": "sk-your-key-here",
-  "protocol": "anthropic",
-  "mode": "passthrough",
-  "model_map": {
-    "claude-opus-4-6": "deepseek-v4-pro",
-    "claude-sonnet-4-6": "deepseek-v4-flash",
-    "claude-3-5-sonnet-20241022": "deepseek-v4-flash"
-  }
+  "default_upstream": 0,
+  "model_routes": [
+    {"client_model": "claude-opus-4-6", "upstream": 0},
+    {"client_model": "claude-sonnet-4-6", "upstream": 0},
+    {"client_model": "claude-haiku-4-5", "upstream": 1}
+  ],
+  "upstreams": [
+    {
+      "name": "deepseek-anthropic",
+      "url": "https://api.deepseek.com/anthropic",
+      "token": "sk-your-deepseek-key",
+      "auth_type": "anthropic",
+      "protocol": "anthropic",
+      "mappings": [
+        {"client_model": "claude-opus-4-6", "upstream_model": "deepseek-v4-pro"},
+        {"client_model": "claude-sonnet-4-6", "upstream_model": "deepseek-v4-flash"},
+        {"client_model": "claude-haiku-4-5", "upstream_model": "deepseek-v4-flash"}
+      ]
+    },
+    {
+      "name": "xiaomi-mimo",
+      "url": "https://api.xiaomimimo.com/anthropic",
+      "token": "tp-your-mimo-key",
+      "auth_type": "anthropic",
+      "protocol": "anthropic",
+      "mappings": [
+        {"client_model": "claude-opus-4-6", "upstream_model": "mimo-2.5-pro"},
+        {"client_model": "claude-sonnet-4-6", "upstream_model": "mimo-2.5"},
+        {"client_model": "claude-haiku-4-5", "upstream_model": "mimo-2.5-flash"}
+      ]
+    }
+  ]
 }
 ```
 
@@ -53,12 +77,14 @@ ANTHROPIC_BASE_URL=http://127.0.0.1:9483 ANTHROPIC_API_KEY=any claude
 # Claude Desktop — 将 Base URL 设为 http://127.0.0.1:9483
 ```
 
-## 工作模式
+## 配置模型
 
-| 模式 | `upstream_url` | 适用场景 |
-|---|---|---|
-| `passthrough` | Anthropic 兼容端点（如 `api.deepseek.com/anthropic`） | 上游原生支持 Anthropic 协议，仅做模型名替换 |
-| `anthropic-to-openai` | OpenAI 兼容端点（如 `api.deepseek.com`） | 完整协议转换：Anthropic 请求 → OpenAI，OpenAI 响应 → Anthropic。支持流式、Tool Use |
+| 字段 | 作用 |
+|---|---|
+| `model_routes` | 客户端模型 → 上游索引。用于模型混搭，例如 Opus 走 DeepSeek、Haiku 走 MiMo。 |
+| `default_upstream` | 没有命中 `model_routes` 时使用的默认上游。 |
+| `upstreams[].mappings` | 该上游自己的模型名目录。多个上游可以保留同一个客户端模型名，各自映射到不同上游模型。 |
+| `upstreams[].protocol` | `anthropic` 直接透传；`openai` 自动做 Anthropic ↔ OpenAI 协议转换。 |
 
 ## 部署到服务器（Linux）
 
